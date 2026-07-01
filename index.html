@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Навигатор · StarWars Phase 2</title>
+<title>StarWarsRP · Навигатор</title>
 <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, 'Segoe UI', Roboto, sans-serif; }
     :root {
@@ -65,6 +65,15 @@
         outline: none; cursor: pointer;
     }
     .field-ctl select:focus { border-color: var(--accent); background: #16505f; }
+
+    .phase-toggle { display: inline-flex; border: 1px solid #3f8090; border-radius: 8px; overflow: hidden; }
+    .phase-toggle button {
+        background: #123f4b; color: var(--muted); border: none; border-radius: 0;
+        padding: 5px 12px; font-size: .82rem; font-weight: 600;
+    }
+    .phase-toggle button + button { border-left: 1px solid #3f8090; }
+    .phase-toggle button.active { background: var(--accent); color: #08151a; }
+    .phase-toggle button:hover:not(.active) { background: #16505f; color: var(--text); }
 
     button {
         background: #2f6474; color: #fff; border: 1px solid #4f97a8;
@@ -132,7 +141,14 @@
 <body>
 
 <div class="bar">
-    <div class="title">🧭 <b>StarWars Phase 2</b> · навигатор</div>
+    <div class="title">🧭 <b>StarWarsRP</b> · навигатор</div>
+    <div class="field-ctl">
+        <label>Фаза</label>
+        <div class="phase-toggle" id="phaseToggle">
+            <button type="button" data-phase="1">Phase-1</button>
+            <button type="button" data-phase="2">Phase-2</button>
+        </div>
+    </div>
     <div class="field-ctl">
         <label for="mapSelect">Карта</label>
         <select id="mapSelect"></select>
@@ -195,29 +211,30 @@
     // rowsFromTop: true — строка A сверху; false — строка A снизу
     // ownLabels: true — рисовать свою сетку и подписи (легенда обрезана);
     //            false — подписи уже впечатаны в изображение
+    // phase: номер фазы (1 или 2) — для группировки в переключателе фаз
     const MAPS = [
-        { id: 'mcb',      name: 'МЦБ-17/9/3-18',       file: 'field.jpg',           cols: 15, rows: 15, rowsFromTop: true,  ownLabels: true,  cellSide: 135 },
-        { id: 'tat',      name: 'Татуин',              file: 'tatooine.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'tatc',     name: 'Татуин - город',      file: 'tatooine-city.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'alderaan', name: 'Альдераан',           file: 'alderaan.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'anaxes',   name: 'Анаксес',             file: 'anaxes.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'felucia',  name: 'Фелуция',             file: 'feluciya.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'geo',      name: 'Джеонозис - улитка',  file: 'jeonozis.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'geo-base', name: 'Джеонозис - база',    file: 'jeonozis-base.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'geo-fact', name: 'Джеонозис - завод',   file: 'jeonozis-factory.png',cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'geo-main', name: 'Джеонозис - гл.улей', file: 'jeonozis-main.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'cor-under',name: 'Корусант - подземный',file: 'koresant-under.png',  cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'rishi',    name: 'Луна Риши',           file: 'luna-rishi.png',      cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'mygeeto',  name: 'Мигетто',             file: 'migetto.png',         cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'mygeeto2', name: 'Мигетто-2',           file: 'migetto-2.png',       cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'moraband', name: 'Морабанд',            file: 'moraband.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'nabu-ang', name: 'Набу - ангар',        file: 'nabu-angar.png',      cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'nabu-tr',  name: 'Набу - лес',          file: 'nabu-tree.png',       cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'renvar',   name: 'Рен Вар',             file: 'renvar.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'renvar-mt',name: 'Рен Вар - горы',      file: 'renvar-mountain.png', cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'ryloth',   name: 'Рилот',               file: 'rilot.png',           cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'takodana', name: 'Такодана',            file: 'takodana.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
-        { id: 'utapau',   name: 'Утапау',              file: 'utapau.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
+        { id: 'mcb',      name: 'МЦБ-17/9/3-18',       file: 'field.jpg',           cols: 15, rows: 15, rowsFromTop: true,  ownLabels: true,  cellSide: 135, phase: 2 },
+        { id: 'tat',      name: 'Татуин',              file: 'tatooine.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'tatc',     name: 'Татуин - город',      file: 'tatooine-city.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'alderaan', name: 'Альдераан',           file: 'alderaan.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'anaxes',   name: 'Анаксес',             file: 'anaxes.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'felucia',  name: 'Фелуция',             file: 'feluciya.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'geo',      name: 'Джеонозис - улитка',  file: 'jeonozis.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'geo-base', name: 'Джеонозис - база',    file: 'jeonozis-base.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'geo-fact', name: 'Джеонозис - завод',   file: 'jeonozis-factory.png',cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'geo-main', name: 'Джеонозис - гл.улей', file: 'jeonozis-main.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'cor-under',name: 'Корусант - подземный',file: 'koresant-under.png',  cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'rishi',    name: 'Луна Риши',           file: 'luna-rishi.png',      cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'mygeeto',  name: 'Мигетто',             file: 'migetto.png',         cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'mygeeto2', name: 'Мигетто-2',           file: 'migetto-2.png',       cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'moraband', name: 'Морабанд',            file: 'moraband.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'nabu-ang', name: 'Набу - ангар',        file: 'nabu-angar.png',      cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'nabu-tr',  name: 'Набу - лес',          file: 'nabu-tree.png',       cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'renvar',   name: 'Рен Вар',             file: 'renvar.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'renvar-mt',name: 'Рен Вар - горы',      file: 'renvar-mountain.png', cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'ryloth',   name: 'Рилот',               file: 'rilot.png',           cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'takodana', name: 'Такодана',            file: 'takodana.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'utapau',   name: 'Утапау',              file: 'utapau.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
     ];
     let map = MAPS[0];
 
@@ -554,18 +571,53 @@
         update();
     });
 
-    // ---- выбор карты ----
+    // ---- выбор фазы и карты ----
     const mapSelect = document.getElementById('mapSelect');
-    MAPS.forEach((m, i) => {
-        const opt = document.createElement('option');
-        opt.value = i; opt.textContent = m.name;
-        mapSelect.appendChild(opt);
-    });
+    const phaseToggle = document.getElementById('phaseToggle');
+    let currentPhase = 2;
+
+    // заполнить список картами текущей фазы; вернуть глобальный индекс первой карты или null
+    function populateMapSelect() {
+        mapSelect.innerHTML = '';
+        const inPhase = MAPS.map((m, i) => ({ m, i })).filter(x => x.m.phase === currentPhase);
+        if (inPhase.length === 0) {
+            const opt = document.createElement('option');
+            opt.textContent = '— карт пока нет —';
+            opt.disabled = true; opt.selected = true;
+            mapSelect.appendChild(opt);
+            mapSelect.disabled = true;
+            return null;
+        }
+        mapSelect.disabled = false;
+        inPhase.forEach(({ m, i }) => {
+            const opt = document.createElement('option');
+            opt.value = i; opt.textContent = m.name;
+            mapSelect.appendChild(opt);
+        });
+        return inPhase[0].i;
+    }
+
+    function setPhase(p) {
+        currentPhase = p;
+        Array.from(phaseToggle.children).forEach(b => {
+            b.classList.toggle('active', +b.dataset.phase === p);
+        });
+        const firstIdx = populateMapSelect();
+        if (firstIdx !== null) {
+            mapSelect.value = firstIdx;
+            loadMap(MAPS[firstIdx]);
+        }
+    }
+
     mapSelect.addEventListener('change', () => loadMap(MAPS[+mapSelect.value]));
+    phaseToggle.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-phase]');
+        if (btn) setPhase(+btn.dataset.phase);
+    });
 
     window.addEventListener('resize', resize);
     updateCompassNote();
-    loadMap(MAPS[0]);
+    setPhase(2);
 })();
 </script>
 </body>
