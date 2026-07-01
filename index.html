@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Навигатор · StarWars Phase 2</title>
+<style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, 'Segoe UI', Roboto, sans-serif; }
+    :root {
+        --bg: #0a1a20;
+        --panel: #10333d;
+        --panel-2: #0c2731;
+        --line: #2d6775;
+        --accent: #6fc1d6;
+        --me: #4fd0ff;
+        --target: #ffd24a;
+        --text: #dff1f5;
+        --muted: #7fb2c0;
+    }
+    html, body { height: 100%; }
+    body {
+        background: radial-gradient(circle at 50% 0%, #12333d, #08151a);
+        color: var(--text);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 10px;
+        gap: 10px;
+        user-select: none;
+        min-height: 100%;
+    }
+
+    .bar {
+        width: 100%;
+        max-width: 900px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 8px 12px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px 14px;
+    }
+    .title { font-weight: 300; font-size: 1.05rem; letter-spacing: .5px; }
+    .title b { font-weight: 600; }
+    .map-badge {
+        display: inline-block; margin-left: 6px; padding: 2px 9px;
+        font-size: .72rem; font-weight: 600; letter-spacing: .5px;
+        background: #1c4e5c; border: 1px solid #4f97a8; border-radius: 20px; color: var(--accent);
+    }
+    .spacer { flex: 1; }
+
+    .field-ctl { display: flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); }
+    .field-ctl input {
+        width: 66px; padding: 5px 8px; text-align: center;
+        border: 1px solid #3f8090; border-radius: 8px;
+        background: #123f4b; color: var(--text); font-size: .95rem; font-weight: 600;
+        outline: none;
+    }
+    .field-ctl input:focus { border-color: var(--accent); background: #16505f; }
+    .field-ctl select {
+        padding: 5px 8px; border: 1px solid #3f8090; border-radius: 8px;
+        background: #123f4b; color: var(--text); font-size: .9rem; font-weight: 600;
+        outline: none; cursor: pointer;
+    }
+    .field-ctl select:focus { border-color: var(--accent); background: #16505f; }
+
+    button {
+        background: #2f6474; color: #fff; border: 1px solid #4f97a8;
+        padding: 6px 14px; border-radius: 9px; font-size: .82rem; font-weight: 500;
+        cursor: pointer; transition: .12s;
+    }
+    button:hover { background: #3d8496; }
+    button:active { transform: scale(.96); }
+    button.danger { background: #7a3d3d; border-color: #b06a6a; }
+    button.danger:hover { background: #984c4c; }
+
+    .stage {
+        width: 100%;
+        max-width: 900px;
+        aspect-ratio: 1 / 1;
+        position: relative;
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0,0,0,.5);
+    }
+    #map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
+
+    .zoom-ctl {
+        position: absolute; right: 10px; bottom: 10px;
+        display: flex; flex-direction: column; gap: 6px; z-index: 5;
+    }
+    .zoom-ctl button {
+        width: 38px; height: 38px; padding: 0; font-size: 1.15rem; line-height: 1;
+        border-radius: 10px; background: rgba(16,51,61,0.85); border: 1px solid #4f97a8;
+        backdrop-filter: blur(3px);
+    }
+    .zoom-ctl .zlvl {
+        text-align: center; font-size: .62rem; color: var(--muted);
+        background: rgba(12,39,49,0.8); border: 1px solid var(--line);
+        border-radius: 8px; padding: 2px 0;
+    }
+
+    .results {
+        width: 100%;
+        max-width: 900px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 8px;
+    }
+    .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 8px 12px;
+    }
+    .card .lbl { font-size: .62rem; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+    .card .val { font-size: 1.35rem; font-weight: 600; margin-top: 2px; font-feature-settings: "tnum"; }
+    .card .val small { font-size: .7rem; font-weight: 300; color: var(--muted); }
+    .card.me   { border-left: 3px solid var(--me); }
+    .card.target { border-left: 3px solid var(--target); }
+    .dot { display:inline-block; width:9px; height:9px; border-radius:50%; vertical-align:middle; margin-right:4px; }
+    .dot.me { background: var(--me); } .dot.target { background: var(--target); }
+
+    .hint { font-size: .75rem; color: var(--muted); }
+    .compass-note b { color: var(--target); }
+</style>
+</head>
+<body>
+
+<div class="bar">
+    <div class="title">🧭 <b>StarWars Phase 2</b> · навигатор</div>
+    <div class="field-ctl">
+        <label for="mapSelect">Карта</label>
+        <select id="mapSelect"></select>
+    </div>
+    <div class="spacer"></div>
+    <div class="field-ctl">
+        <label for="cellSize">Сторона клетки</label>
+        <input type="number" id="cellSize" value="135" min="0.1" step="1">
+        <span>ед.</span>
+    </div>
+    <button id="northBtn" title="Повернуть север на 90°">🧭 Север: →</button>
+    <button id="clearBtn" class="danger">✕ Сброс</button>
+</div>
+
+<div class="stage">
+    <canvas id="map"></canvas>
+    <div class="zoom-ctl">
+        <button id="zoomIn" title="Приблизить">+</button>
+        <div class="zlvl" id="zoomLvl">1.0×</div>
+        <button id="zoomOut" title="Отдалить">−</button>
+        <button id="zoomReset" title="Сбросить вид">⟲</button>
+    </div>
+</div>
+
+<div class="results">
+    <div class="card me">
+        <div class="lbl"><span class="dot me"></span>Моя позиция</div>
+        <div class="val" id="meCell">—</div>
+    </div>
+    <div class="card target">
+        <div class="lbl"><span class="dot target"></span>Цель</div>
+        <div class="val" id="targetCell">—</div>
+    </div>
+    <div class="card">
+        <div class="lbl">📏 Расстояние</div>
+        <div class="val" id="distVal">— <small>ед.</small></div>
+    </div>
+    <div class="card">
+        <div class="lbl">🧭 Азимут</div>
+        <div class="val" id="azVal">— <small>°</small></div>
+    </div>
+</div>
+
+<div class="bar" style="justify-content:center; gap:16px;">
+    <span class="hint">ЛКМ — точка · перетащить точку — сдвинуть · колесо — зум · ПКМ/Ctrl — панорама · 3-й клик — новая позиция</span>
+    <span class="hint compass-note" id="compassNote"></span>
+</div>
+
+<script>
+(function () {
+    const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const canvas = document.getElementById('map');
+    const ctx = canvas.getContext('2d');
+    const cellSizeInput = document.getElementById('cellSize');
+    const clearBtn = document.getElementById('clearBtn');
+    const stage = document.querySelector('.stage');
+
+    // ---- конфигурация карт ----
+    // cols: столбцов (числа 1..cols); rows: строк (буквы A..)
+    // rowsFromTop: true — строка A сверху; false — строка A снизу
+    // ownLabels: true — рисовать свою сетку и подписи (легенда обрезана);
+    //            false — подписи уже впечатаны в изображение
+    const MAPS = [
+        { id: 'mcb',   name: 'МЦБ',           file: 'field.jpg',          cols: 15, rows: 15, rowsFromTop: true,  ownLabels: true,  cellSide: 135 },
+        { id: 'tat',   name: 'Татуин',        file: 'tatooine.png',       cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
+        { id: 'tatc',  name: 'Татуин-город',  file: 'tatooine-city.png',  cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135 },
+    ];
+    let map = MAPS[0];
+
+    const bg = new Image();
+    let bgReady = false;
+    bg.onload = () => {
+        bgReady = true;
+        stage.style.aspectRatio = bg.naturalWidth + ' / ' + bg.naturalHeight;
+        resize();
+    };
+
+    let cellSide = 135;
+    let me = null;       // {x,y} в нормализованных координатах поля [0..1]
+    let target = null;
+
+    function loadMap(m) {
+        map = m;
+        cellSide = m.cellSide;
+        cellSizeInput.value = m.cellSide;
+        me = null; target = null;
+        scale = 1; offX = 0; offY = 0;
+        document.getElementById('zoomLvl').textContent = '1.0×';
+        bgReady = false;
+        bg.src = m.file;
+        update();
+    }
+
+    // направление севера: 0=вправо(→), 1=вниз(↓), 2=влево(←), 3=вверх(↑)
+    let northDir = 0;
+    const DIR_ARROW = ['→', '↓', '←', '↑'];
+    const DIR_WORD  = ['вправо', 'вниз', 'влево', 'вверх'];
+
+    // ---- вид (зум/панорама) в устройственных пикселях canvas ----
+    let scale = 1, offX = 0, offY = 0;
+    const MIN_SCALE = 1, MAX_SCALE = 12;
+
+    function clampView() {
+        scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
+        const W = canvas.width, H = canvas.height;
+        offX = Math.min(0, Math.max(W - W * scale, offX));
+        offY = Math.min(0, Math.max(H - H * scale, offY));
+    }
+    function zoomAt(deviceX, deviceY, factor) {
+        const old = scale;
+        scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale * factor));
+        const k = scale / old;
+        offX = deviceX - (deviceX - offX) * k;
+        offY = deviceY - (deviceY - offY) * k;
+        clampView();
+        document.getElementById('zoomLvl').textContent = scale.toFixed(1) + '×';
+        render();
+    }
+
+    // ---- размер canvas под дисплей ----
+    function resize() {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.round(rect.width * dpr);
+        canvas.height = Math.round(rect.height * dpr);
+        clampView();
+        render();
+    }
+
+    // ---- координаты клетки из нормализованной точки ----
+    function cellLabel(p) {
+        let cx = Math.max(0, Math.min(map.cols - 1, Math.floor(p.x * map.cols)));
+        let sy = Math.max(0, Math.min(map.rows - 1, Math.floor(p.y * map.rows))); // индекс строки сверху
+        const rowIdx = map.rowsFromTop ? sy : (map.rows - 1 - sy);                // индекс буквы
+        return LETTERS[rowIdx] + (cx + 1);   // напр. "H8": строка-буква + столбец-число
+    }
+
+    // ---- отрисовка ----
+    function render() {
+        const W = canvas.width, H = canvas.height;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, W, H);
+        // применяем вид: смещение + масштаб
+        ctx.setTransform(scale, 0, 0, scale, offX, offY);
+
+        if (bgReady) ctx.drawImage(bg, 0, 0, W, H);
+        else { ctx.fillStyle = '#123'; ctx.fillRect(0, 0, W, H); }
+
+        // сетка (толщина/шрифт компенсируют масштаб — постоянный экранный размер)
+        const s = scale;
+        if (map.ownLabels) {
+            ctx.lineWidth = 1 / s;
+            ctx.strokeStyle = 'rgba(140,200,215,0.18)';
+            ctx.font = `${(H/70)/s}px system-ui`;
+            ctx.fillStyle = 'rgba(200,235,245,0.7)';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            for (let i = 0; i <= map.cols; i++) {
+                const x = i / map.cols * W;
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+            }
+            for (let i = 0; i <= map.rows; i++) {
+                const y = i / map.rows * H;
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+            }
+            // подписи столбцов/строк держим у видимого края canvas
+            const edgeX = Math.max(0, -offX / s), edgeY = Math.max(0, -offY / s);
+            for (let i = 0; i < map.cols; i++) {
+                const cx = (i + 0.5) / map.cols * W;
+                ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+                ctx.fillText(i + 1, cx, edgeY + 3 / s);        // номера столбцов сверху
+            }
+            for (let i = 0; i < map.rows; i++) {
+                const cy = (i + 0.5) / map.rows * H;
+                const letter = LETTERS[map.rowsFromTop ? i : (map.rows - 1 - i)];
+                ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+                ctx.fillText(letter, edgeX + 4 / s, cy);       // буквы строк слева
+            }
+        }
+
+        // линия
+        if (me && target) {
+            ctx.beginPath();
+            ctx.moveTo(me.x * W, me.y * H);
+            ctx.lineTo(target.x * W, target.y * H);
+            ctx.strokeStyle = 'rgba(230,245,255,0.9)';
+            ctx.lineWidth = 2 / s;
+            ctx.setLineDash([8 / s, 6 / s]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        drawPoint(me, '#4fd0ff', 'Я');
+        drawPoint(target, '#ffd24a', 'Цель');
+
+        drawCompass();
+    }
+
+    // компас-HUD: стрелка на север, фиксирован в углу (без учёта зума/панорамы)
+    function drawCompass() {
+        const W = canvas.width;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        const R = Math.max(24, W / 22);
+        const cx = W - R - R * 0.6, cy = R + R * 0.6;
+        const a = northDir * Math.PI / 2;          // угол севера (0=вправо, y вниз)
+        const nx = Math.cos(a), ny = Math.sin(a);
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(8,21,26,0.6)';
+        ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(120,190,205,0.7)'; ctx.stroke();
+
+        // стрелка N (красный конец) / хвост (серый)
+        ctx.lineWidth = Math.max(2, R / 9);
+        ctx.strokeStyle = '#ff6060';
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + nx * R * 0.7, cy + ny * R * 0.7); ctx.stroke();
+        ctx.strokeStyle = 'rgba(200,225,235,0.6)';
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx - nx * R * 0.5, cy - ny * R * 0.5); ctx.stroke();
+
+        // буква N у острия
+        ctx.fillStyle = '#ff8080';
+        ctx.font = `bold ${R * 0.55}px system-ui`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('N', cx + nx * (R + R * 0.35), cy + ny * (R + R * 0.35));
+    }
+
+    function drawPoint(p, color, label) {
+        if (!p) return;
+        const W = canvas.width, H = canvas.height, s = scale;
+        const x = p.x * W, y = p.y * H;
+        const r = Math.max(6, W / 130) / s;   // постоянный экранный размер
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, 2 * Math.PI);
+        ctx.fillStyle = color;
+        ctx.shadowColor = color; ctx.shadowBlur = 12 / s;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.lineWidth = 2 / s; ctx.strokeStyle = '#08151a'; ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.font = `bold ${(W/60)/s}px system-ui`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.lineWidth = 3 / s; ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.strokeText(label, x, y - r - 3 / s);
+        ctx.fillText(label, x, y - r - 3 / s);
+    }
+
+    // ---- вычисления ----
+    function update() {
+        document.getElementById('meCell').textContent = me ? cellLabel(me) : '—';
+        document.getElementById('targetCell').textContent = target ? cellLabel(target) : '—';
+
+        if (me && target) {
+            // вектор в единицах клеток (клетки квадратные — метрика корректна при любом cols/rows)
+            const vx = (target.x - me.x) * map.cols;  // экран вправо = +
+            const vy = (target.y - me.y) * map.rows;  // экран вниз = +
+            const distCells = Math.hypot(vx, vy);
+            const distUnits = distCells * cellSide;
+            document.getElementById('distVal').innerHTML =
+                distUnits.toFixed(1) + ' <small>ед. · ' + distCells.toFixed(2) + ' кл.</small>';
+
+            // 0° = север; север задан направлением northDir (по часовой, экран y вниз)
+            let az = Math.atan2(vy, vx) * 180 / Math.PI - northDir * 90;
+            az = ((az % 360) + 360) % 360;
+            document.getElementById('azVal').innerHTML = az.toFixed(1) + ' <small>°</small>';
+        } else {
+            document.getElementById('distVal').innerHTML = '— <small>ед.</small>';
+            document.getElementById('azVal').innerHTML = '— <small>°</small>';
+        }
+        render();
+    }
+
+    // ---- ввод ----
+    function eventToDevice(e) {
+        const rect = canvas.getBoundingClientRect();
+        const src = e.touches && e.touches.length ? e.touches[0] : e;
+        return {
+            x: (src.clientX - rect.left) * (canvas.width / rect.width),
+            y: (src.clientY - rect.top) * (canvas.height / rect.height)
+        };
+    }
+    function eventToNorm(e) {
+        const d = eventToDevice(e);
+        const baseX = (d.x - offX) / scale;
+        const baseY = (d.y - offY) / scale;
+        return {
+            x: Math.max(0, Math.min(1, baseX / canvas.width)),
+            y: Math.max(0, Math.min(1, baseY / canvas.height))
+        };
+    }
+
+    let dragging = null; // 'me' | 'target'
+    let panning = false, panLast = null;
+    function hitTest(p) {
+        const thr = 0.03 / scale;   // порог захвата точки в норм-координатах (учёт зума)
+        if (target && Math.hypot(target.x - p.x, target.y - p.y) < thr) return 'target';
+        if (me && Math.hypot(me.x - p.x, me.y - p.y) < thr) return 'me';
+        return null;
+    }
+
+    function onDown(e) {
+        // панорама: ПКМ, средняя кнопка или Ctrl
+        if (e.button === 2 || e.button === 1 || e.ctrlKey) {
+            e.preventDefault();
+            panning = true; panLast = eventToDevice(e);
+            return;
+        }
+        e.preventDefault();
+        const p = eventToNorm(e);
+        const hit = hitTest(p);
+        if (hit) { dragging = hit; return; }
+        if (!me) me = p;
+        else if (!target) target = p;
+        else { me = p; target = null; }   // 3-й клик — новая позиция
+        update();
+    }
+    function onMove(e) {
+        if (panning) {
+            const d = eventToDevice(e);
+            offX += d.x - panLast.x; offY += d.y - panLast.y;
+            panLast = d; clampView(); render();
+            return;
+        }
+        if (!dragging) return;
+        e.preventDefault();
+        const p = eventToNorm(e);
+        if (dragging === 'me') me = p; else target = p;
+        update();
+    }
+    function onUp() { dragging = null; panning = false; }
+
+    canvas.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // колесо — зум под курсором
+    canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const d = eventToDevice(e);
+        zoomAt(d.x, d.y, e.deltaY < 0 ? 1.15 : 1 / 1.15);
+    }, { passive: false });
+
+    // ---- сенсор: 1 палец — точка/перетаскивание, 2 пальца — зум+панорама ----
+    let pinch = null;
+    function touchDist(t) { return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY); }
+    function touchMid(t) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: ((t[0].clientX + t[1].clientX) / 2 - rect.left) * (canvas.width / rect.width),
+            y: ((t[0].clientY + t[1].clientY) / 2 - rect.top) * (canvas.height / rect.height)
+        };
+    }
+    canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) { pinch = { d: touchDist(e.touches), m: touchMid(e.touches) }; return; }
+        onDown(e);
+    }, { passive: false });
+    canvas.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2 && pinch) {
+            e.preventDefault();
+            const nd = touchDist(e.touches), nm = touchMid(e.touches);
+            zoomAt(nm.x, nm.y, nd / pinch.d);
+            offX += nm.x - pinch.m.x; offY += nm.y - pinch.m.y; clampView(); render();
+            pinch = { d: nd, m: nm };
+            return;
+        }
+        onMove(e);
+    }, { passive: false });
+    window.addEventListener('touchend', (e) => { if (e.touches.length === 0) pinch = null; onUp(); });
+
+    // кнопки зума
+    function centerDevice() { return { x: canvas.width / 2, y: canvas.height / 2 }; }
+    document.getElementById('zoomIn').addEventListener('click', () => { const c = centerDevice(); zoomAt(c.x, c.y, 1.4); });
+    document.getElementById('zoomOut').addEventListener('click', () => { const c = centerDevice(); zoomAt(c.x, c.y, 1 / 1.4); });
+    document.getElementById('zoomReset').addEventListener('click', () => {
+        scale = 1; offX = 0; offY = 0; clampView();
+        document.getElementById('zoomLvl').textContent = '1.0×'; render();
+    });
+
+    cellSizeInput.addEventListener('input', () => {
+        const v = parseFloat(cellSizeInput.value);
+        if (!isNaN(v) && v > 0) { cellSide = v; update(); }
+    });
+    clearBtn.addEventListener('click', () => { me = null; target = null; update(); });
+
+    // ---- направление севера ----
+    function updateCompassNote() {
+        // по часовой от севера: N, E, S, W
+        const dirs = ['N', 'E', 'S', 'W'];
+        const words = [];
+        for (let k = 0; k < 4; k++) {
+            words.push(`<b>${dirs[k]}</b>=${k*90}° (${DIR_WORD[(northDir + k) % 4]})`);
+        }
+        document.getElementById('compassNote').innerHTML = words.join(', ');
+        document.getElementById('northBtn').innerHTML = '🧭 Север: ' + DIR_ARROW[northDir];
+    }
+    document.getElementById('northBtn').addEventListener('click', () => {
+        northDir = (northDir + 1) % 4;
+        updateCompassNote();
+        update();
+    });
+
+    // ---- выбор карты ----
+    const mapSelect = document.getElementById('mapSelect');
+    MAPS.forEach((m, i) => {
+        const opt = document.createElement('option');
+        opt.value = i; opt.textContent = m.name;
+        mapSelect.appendChild(opt);
+    });
+    mapSelect.addEventListener('change', () => loadMap(MAPS[+mapSelect.value]));
+
+    window.addEventListener('resize', resize);
+    updateCompassNote();
+    loadMap(MAPS[0]);
+})();
+</script>
+</body>
+</html>
