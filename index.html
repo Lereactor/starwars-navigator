@@ -813,9 +813,10 @@
         ballistic: 'ЛКМ — точка · перетащить точку — сдвинуть · 3-й клик — новая позиция · колесо — зум · ПКМ/Ctrl — панорама',
     };
 
-    // ---- панель быстрых маршрутов LAAT/i (только карта МЦБ) ----
+    // ---- панель быстрых маршрутов для техники (только карта МЦБ) ----
     const quickRoutes = document.getElementById('quickRoutes');
-    quickRoutes.innerHTML = '<h4>LAAT/i · старт ' + MCB_QUICK_START.row + MCB_QUICK_START.col + '</h4>';
+    const quickRoutesTitle = document.createElement('h4');
+    quickRoutes.appendChild(quickRoutesTitle);
     MCB_QUICK_ROUTES.forEach(r => {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -827,8 +828,11 @@
         quickRoutes.appendChild(btn);
     });
     function updateQuickRoutesVisibility() {
-        const show = map.id === 'mcb' && currentCat === CATEGORIES.transport && currentMode && currentMode.id === 'laat';
+        const show = map.id === 'mcb' && currentCat === CATEGORIES.transport;
         quickRoutes.classList.toggle('show', show);
+        if (show) {
+            quickRoutesTitle.textContent = currentMode.name + ' · старт ' + MCB_QUICK_START.row + MCB_QUICK_START.col;
+        }
     }
 
     // калибровка сек/клетку для текущего режима — редактируется прямо на странице,
