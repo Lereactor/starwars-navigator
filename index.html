@@ -136,6 +136,38 @@
 
     .hint { font-size: .75rem; color: var(--muted); }
     .compass-note b { color: var(--target); }
+
+    /* маршрут: точки + таблица участков */
+    .results.path { display: block; }
+    .path-points {
+        background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+        padding: 8px 12px; margin-bottom: 8px; font-size: .95rem; font-weight: 600;
+        display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    }
+    .path-points .lbl { font-size: .62rem; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); font-weight: 600; margin-right: 4px; }
+    .path-points .pt { color: var(--me); }
+    .path-points .pt:last-child { color: var(--target); }
+    .path-points .arrow { color: var(--muted); font-weight: 300; }
+    .seg-table {
+        width: 100%; border-collapse: collapse; overflow: hidden;
+        background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    }
+    .seg-table th, .seg-table td { padding: 7px 12px; text-align: left; font-size: .9rem; }
+    .seg-table thead th {
+        font-size: .62rem; text-transform: uppercase; letter-spacing: .6px;
+        color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line);
+    }
+    .seg-table tbody tr + tr td { border-top: 1px solid rgba(45,103,117,0.4); }
+    .seg-table td.seg { color: var(--accent); font-weight: 600; }
+    .seg-table td small { color: var(--muted); font-weight: 300; }
+    .seg-table tr.total td {
+        border-top: 2px solid var(--line); font-weight: 700; color: var(--target);
+        background: var(--panel-2);
+    }
+    .empty-note {
+        grid-column: 1 / -1; color: var(--muted); font-size: .85rem;
+        padding: 10px 4px;
+    }
 </style>
 </head>
 <body>
@@ -155,11 +187,37 @@
     </div>
     <div class="spacer"></div>
     <div class="field-ctl">
+        <label>Тип</label>
+        <div class="phase-toggle" id="typeToggle">
+            <button type="button" data-cat="clone">Клон</button>
+            <button type="button" data-cat="transport">Транспорт</button>
+            <button type="button" data-cat="weapon">Оружие</button>
+        </div>
+    </div>
+    <div class="field-ctl">
+        <label for="modeSelect" id="modeLabel">Режим</label>
+        <select id="modeSelect"></select>
+    </div>
+    <div class="field-ctl" id="speedCtl" style="display:none">
+        <label for="speedSelect">Скорость</label>
+        <select id="speedSelect"></select>
+    </div>
+    <div class="field-ctl" id="calibCtl" style="display:none">
+        <label for="calibInput" id="calibLabel">Калибровка</label>
+        <input type="number" id="calibInput" step="0.01" min="0" placeholder="—">
+        <span>с/кл</span>
+    </div>
+</div>
+
+<div class="bar">
+    <div class="field-ctl">
         <label for="cellSize">Сторона клетки</label>
         <input type="number" id="cellSize" value="135" min="0.1" step="1">
         <span>ед.</span>
     </div>
+    <div class="spacer"></div>
     <button id="northBtn" title="Повернуть север на 90°">🧭 Север: →</button>
+    <button id="undoBtn" title="Убрать последнюю точку">↶ Убрать последнюю</button>
     <button id="clearBtn" class="danger">✕ Сброс</button>
 </div>
 
@@ -173,27 +231,10 @@
     </div>
 </div>
 
-<div class="results">
-    <div class="card me">
-        <div class="lbl"><span class="dot me"></span>Моя позиция</div>
-        <div class="val" id="meCell">—</div>
-    </div>
-    <div class="card target">
-        <div class="lbl"><span class="dot target"></span>Цель</div>
-        <div class="val" id="targetCell">—</div>
-    </div>
-    <div class="card">
-        <div class="lbl">📏 Расстояние</div>
-        <div class="val" id="distVal">— <small>ед.</small></div>
-    </div>
-    <div class="card">
-        <div class="lbl">🧭 Азимут</div>
-        <div class="val" id="azVal">— <small>°</small></div>
-    </div>
-</div>
+<div class="results" id="results"></div>
 
 <div class="bar" style="justify-content:center; gap:16px;">
-    <span class="hint">ЛКМ — точка · перетащить точку — сдвинуть · колесо — зум · ПКМ/Ctrl — панорама · 3-й клик — новая позиция</span>
+    <span class="hint" id="hintText"></span>
     <span class="hint compass-note" id="compassNote"></span>
 </div>
 
@@ -238,6 +279,40 @@
     ];
     let map = MAPS[0];
 
+    // ---- типы и режимы ----
+    // kind: 'path' — маршрут из N точек (клон/транспорт), считает время;
+    //       'ballistic' — 2 точки я→цель (оружие), считает азимут.
+    // secPerCell    — секунд на клетку (клон/пешком/бег); задать после замеров.
+    // speeds        — если задан, добавляется выбор скорости; тогда у режима
+    //                 secPerCell100 (сек/клетку при скорости 100), а при другой
+    //                 скорости время считается математически: ×100/скорость.
+    const CATEGORIES = {
+        clone: {
+            label: 'Клон', kind: 'path', modeLabel: 'Режим',
+            modes: [
+                { id: 'walk', name: 'Пешком',      secPerCell: 100 },
+                { id: 'jog',  name: 'Лёгкий бег',  secPerCell: 35 },
+                { id: 'run',  name: 'Быстрый бег', secPerCell: 22 },
+            ],
+        },
+        transport: {
+            label: 'Транспорт', kind: 'path', modeLabel: 'Транспорт',
+            speeds: [100, 300, 1000],
+            modes: [
+                { id: 'laat',   name: 'LAAT/i',  secPerCell100: 18.53 },
+                { id: 'arc170', name: 'ARC-170', secPerCell100: null },
+                { id: 'tx130',  name: 'TX-130',  secPerCell100: null },
+                { id: 'atrt',   name: 'AT-RT',   secPerCell100: null },
+            ],
+        },
+        weapon: {
+            label: 'Оружие', kind: 'ballistic', modeLabel: 'Режим',
+            modes: [
+                { id: 'mortar', name: 'Миномёт' },
+            ],
+        },
+    };
+
     const bg = new Image();
     let bgReady = false;
     bg.onload = () => {
@@ -247,14 +322,15 @@
     };
 
     let cellSide = 135;
-    let me = null;       // {x,y} в нормализованных координатах поля [0..1]
-    let target = null;
+    let points = [];     // массив {x,y} в норм-координатах поля [0..1]
+    let currentCat = CATEGORIES.clone;   // текущий тип
+    let currentMode = currentCat.modes[0];
 
     function loadMap(m) {
         map = m;
         cellSide = m.cellSide;
         cellSizeInput.value = m.cellSide;
-        me = null; target = null;
+        points = [];
         scale = 1; offX = 0; offY = 0;
         document.getElementById('zoomLvl').textContent = '1.0×';
         bgReady = false;
@@ -349,11 +425,11 @@
             }
         }
 
-        // линия
-        if (me && target) {
+        // линия пути (по всем точкам подряд)
+        if (points.length >= 2) {
             ctx.beginPath();
-            ctx.moveTo(me.x * W, me.y * H);
-            ctx.lineTo(target.x * W, target.y * H);
+            ctx.moveTo(points[0].x * W, points[0].y * H);
+            for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x * W, points[i].y * H);
             ctx.strokeStyle = 'rgba(230,245,255,0.9)';
             ctx.lineWidth = 2 / s;
             ctx.setLineDash([8 / s, 6 / s]);
@@ -361,10 +437,23 @@
             ctx.setLineDash([]);
         }
 
-        drawPoint(me, '#4fd0ff', 'Я');
-        drawPoint(target, '#ffd24a', 'Цель');
+        // точки с подписями
+        points.forEach((p, i) => {
+            const st = pointStyle(i, points.length);
+            drawPoint(p, st.color, st.label);
+        });
 
         drawCompass();
+    }
+
+    // цвет и подпись точки: старт — голубой, финиш — жёлтый, промежуточные — акцент
+    function pointStyle(i, n) {
+        if (currentCat.kind === 'ballistic') {
+            return i === 0 ? { color: '#4fd0ff', label: 'Я' } : { color: '#ffd24a', label: 'Цель' };
+        }
+        if (i === 0)       return { color: '#4fd0ff', label: '1' };
+        if (i === n - 1)   return { color: '#ffd24a', label: String(n) };
+        return { color: '#6fc1d6', label: String(i + 1) };
     }
 
     // компас-HUD: стрелка на север, фиксирован в углу (без учёта зума/панорамы)
@@ -417,28 +506,99 @@
     }
 
     // ---- вычисления ----
-    function update() {
-        document.getElementById('meCell').textContent = me ? cellLabel(me) : '—';
-        document.getElementById('targetCell').textContent = target ? cellLabel(target) : '—';
-
-        if (me && target) {
-            // вектор в единицах клеток (клетки квадратные — метрика корректна при любом cols/rows)
-            const vx = (target.x - me.x) * map.cols;  // экран вправо = +
-            const vy = (target.y - me.y) * map.rows;  // экран вниз = +
-            const distCells = Math.hypot(vx, vy);
-            const distUnits = distCells * cellSide;
-            document.getElementById('distVal').innerHTML =
-                distUnits.toFixed(1) + ' <small>ед. · ' + distCells.toFixed(2) + ' кл.</small>';
-
-            // 0° = север; север задан направлением northDir (по часовой, экран y вниз)
-            let az = Math.atan2(vy, vx) * 180 / Math.PI - northDir * 90;
-            az = ((az % 360) + 360) % 360;
-            document.getElementById('azVal').innerHTML = az.toFixed(1) + ' <small>°</small>';
-        } else {
-            document.getElementById('distVal').innerHTML = '— <small>ед.</small>';
-            document.getElementById('azVal').innerHTML = '— <small>°</small>';
+    // метрика участка между двумя норм-точками; клетки квадратные — корректно при любом cols/rows
+    function segMetrics(a, b) {
+        const vx = (b.x - a.x) * map.cols;   // экран вправо = +
+        const vy = (b.y - a.y) * map.rows;   // экран вниз = +
+        const distCells = Math.hypot(vx, vy);
+        const distUnits = distCells * cellSide;
+        let az = Math.atan2(vy, vx) * 180 / Math.PI - northDir * 90;  // 0° = север
+        az = ((az % 360) + 360) % 360;
+        return { distCells, distUnits, az };
+    }
+    // секунд на клетку для текущего режима (с учётом выбранной скорости)
+    function currentSecPerCell() {
+        if (currentCat.speeds) {
+            const base = currentMode.secPerCell100;   // сек/клетку при скорости 100
+            return base == null ? null : base * 100 / currentSpeed;
         }
+        return currentMode.secPerCell;
+    }
+    function fmtTime(distCells) {
+        const spc = currentSecPerCell();
+        if (spc == null) return '—';
+        return (distCells * spc).toFixed(1) + ' с';
+    }
+
+    const results = document.getElementById('results');
+
+    function update() {
+        if (currentCat.kind === 'ballistic') renderBallistic();
+        else renderPath();
         render();
+    }
+
+    function card(cls, lbl, val) {
+        return `<div class="card ${cls}"><div class="lbl">${lbl}</div><div class="val">${val}</div></div>`;
+    }
+
+    // оружие: я → цель, расстояние + азимут
+    function renderBallistic() {
+        results.className = 'results';
+        const me = points[0], target = points[1];
+        let dist = '— <small>ед.</small>', az = '— <small>°</small>';
+        if (me && target) {
+            const m = segMetrics(me, target);
+            dist = m.distUnits.toFixed(1) + ' <small>ед. · ' + m.distCells.toFixed(2) + ' кл.</small>';
+            az = m.az.toFixed(1) + ' <small>°</small>';
+        }
+        results.innerHTML =
+            card('me', '<span class="dot me"></span>Моя позиция', me ? cellLabel(me) : '—') +
+            card('target', '<span class="dot target"></span>Цель', target ? cellLabel(target) : '—') +
+            card('', '📏 Расстояние', dist) +
+            card('', '🧭 Азимут', az);
+    }
+
+    // клон/транспорт: маршрут, участки + итог
+    function renderPath() {
+        results.className = 'results path';
+        if (points.length === 0) {
+            results.innerHTML = '<div class="empty-note">Кликни по карте, чтобы поставить первую точку маршрута.</div>';
+            return;
+        }
+        // строка точек
+        const ptsHtml = points.map((p, i) =>
+            (i ? '<span class="arrow">→</span>' : '') + '<span class="pt">' + cellLabel(p) + '</span>'
+        ).join(' ');
+
+        // участки
+        let rows = '', totCells = 0, totUnits = 0;
+        for (let i = 0; i + 1 < points.length; i++) {
+            const m = segMetrics(points[i], points[i + 1]);
+            totCells += m.distCells; totUnits += m.distUnits;
+            rows += '<tr>' +
+                '<td class="seg">' + (i + 1) + '→' + (i + 2) + '</td>' +
+                '<td>' + m.distUnits.toFixed(1) + ' <small>ед. · ' + m.distCells.toFixed(2) + ' кл.</small></td>' +
+                '<td>' + fmtTime(m.distCells) + '</td>' +
+                '<td>' + m.az.toFixed(1) + '°</td>' +
+                '</tr>';
+        }
+        let table = '';
+        if (points.length >= 2) {
+            table =
+                '<table class="seg-table"><thead><tr>' +
+                '<th>Участок</th><th>Расстояние</th><th>Время</th><th>Азимут</th>' +
+                '</tr></thead><tbody>' + rows +
+                '<tr class="total"><td>ИТОГО</td>' +
+                '<td>' + totUnits.toFixed(1) + ' <small>ед. · ' + totCells.toFixed(2) + ' кл.</small></td>' +
+                '<td>' + fmtTime(totCells) + '</td>' +
+                '<td>—</td></tr>' +
+                '</tbody></table>';
+        } else {
+            table = '<div class="empty-note">Добавь ещё точку, чтобы получить участок.</div>';
+        }
+        results.innerHTML =
+            '<div class="path-points"><span class="lbl">Точки</span>' + ptsHtml + '</div>' + table;
     }
 
     // ---- ввод ----
@@ -460,12 +620,14 @@
         };
     }
 
-    let dragging = null; // 'me' | 'target'
+    let dragging = null; // индекс перетаскиваемой точки
     let panning = false, panLast = null;
     function hitTest(p) {
         const thr = 0.03 / scale;   // порог захвата точки в норм-координатах (учёт зума)
-        if (target && Math.hypot(target.x - p.x, target.y - p.y) < thr) return 'target';
-        if (me && Math.hypot(me.x - p.x, me.y - p.y) < thr) return 'me';
+        // ищем ближайшую с конца, чтобы верхние точки перехватывались первыми
+        for (let i = points.length - 1; i >= 0; i--) {
+            if (Math.hypot(points[i].x - p.x, points[i].y - p.y) < thr) return i;
+        }
         return null;
     }
 
@@ -479,10 +641,13 @@
         e.preventDefault();
         const p = eventToNorm(e);
         const hit = hitTest(p);
-        if (hit) { dragging = hit; return; }
-        if (!me) me = p;
-        else if (!target) target = p;
-        else { me = p; target = null; }   // 3-й клик — новая позиция
+        if (hit !== null) { dragging = hit; return; }
+        if (currentCat.kind === 'ballistic') {
+            if (points.length < 2) points.push(p);
+            else points = [p];               // 3-й клик — новая позиция
+        } else {
+            points.push(p);                  // маршрут — добавить точку в конец
+        }
         update();
     }
     function onMove(e) {
@@ -492,10 +657,9 @@
             panLast = d; clampView(); render();
             return;
         }
-        if (!dragging) return;
+        if (dragging === null) return;
         e.preventDefault();
-        const p = eventToNorm(e);
-        if (dragging === 'me') me = p; else target = p;
+        points[dragging] = eventToNorm(e);
         update();
     }
     function onUp() { dragging = null; panning = false; }
@@ -552,7 +716,8 @@
         const v = parseFloat(cellSizeInput.value);
         if (!isNaN(v) && v > 0) { cellSide = v; update(); }
     });
-    clearBtn.addEventListener('click', () => { me = null; target = null; update(); });
+    clearBtn.addEventListener('click', () => { points = []; update(); });
+    document.getElementById('undoBtn').addEventListener('click', () => { points.pop(); update(); });
 
     // ---- направление севера ----
     function updateCompassNote() {
@@ -568,6 +733,92 @@
     document.getElementById('northBtn').addEventListener('click', () => {
         northDir = (northDir + 1) % 4;
         updateCompassNote();
+        update();
+    });
+
+    // ---- выбор типа (клон/транспорт/оружие), режима и скорости ----
+    const typeToggle = document.getElementById('typeToggle');
+    const modeSelect = document.getElementById('modeSelect');
+    const modeLabel = document.getElementById('modeLabel');
+    const speedCtl = document.getElementById('speedCtl');
+    const speedSelect = document.getElementById('speedSelect');
+    const calibCtl = document.getElementById('calibCtl');
+    const calibLabel = document.getElementById('calibLabel');
+    const calibInput = document.getElementById('calibInput');
+    const undoBtn = document.getElementById('undoBtn');
+    const hintText = document.getElementById('hintText');
+    let currentSpeed = 100;
+
+    const HINTS = {
+        path: 'ЛКМ — добавить точку маршрута · перетащить точку — сдвинуть · «↶ Убрать последнюю» / «Сброс» · колесо — зум · ПКМ/Ctrl — панорама',
+        ballistic: 'ЛКМ — точка · перетащить точку — сдвинуть · 3-й клик — новая позиция · колесо — зум · ПКМ/Ctrl — панорама',
+    };
+
+    // калибровка сек/клетку для текущего режима — редактируется прямо на странице,
+    // без правки кода (аналогично полю «Сторона клетки»)
+    function updateCalibUI() {
+        if (currentCat.kind !== 'path') { calibCtl.style.display = 'none'; return; }
+        calibCtl.style.display = '';
+        calibLabel.textContent = currentCat.speeds ? 'Калибровка (@100)' : 'Калибровка';
+        const v = currentCat.speeds ? currentMode.secPerCell100 : currentMode.secPerCell;
+        calibInput.value = v == null ? '' : v;
+    }
+
+    function setMode(i) {
+        currentMode = currentCat.modes[i] || currentCat.modes[0];
+        updateCalibUI();
+        update();
+    }
+
+    function setCategory(catKey) {
+        currentCat = CATEGORIES[catKey];
+        Array.from(typeToggle.children).forEach(b => {
+            b.classList.toggle('active', b.dataset.cat === catKey);
+        });
+        // заполнить режимы
+        modeLabel.textContent = currentCat.modeLabel;
+        modeSelect.innerHTML = '';
+        currentCat.modes.forEach((m, i) => {
+            const opt = document.createElement('option');
+            opt.value = i; opt.textContent = m.name;
+            modeSelect.appendChild(opt);
+        });
+        modeSelect.value = 0;
+        currentMode = currentCat.modes[0];
+        // выбор скорости — только если у категории есть speeds
+        if (currentCat.speeds) {
+            speedSelect.innerHTML = '';
+            currentCat.speeds.forEach(sp => {
+                const opt = document.createElement('option');
+                opt.value = sp; opt.textContent = sp;
+                speedSelect.appendChild(opt);
+            });
+            currentSpeed = currentCat.speeds[0];
+            speedSelect.value = currentSpeed;
+            speedCtl.style.display = '';
+        } else {
+            speedCtl.style.display = 'none';
+        }
+        // оружие — максимум 2 точки: обрежем лишние при переключении
+        if (currentCat.kind === 'ballistic' && points.length > 2) points = points.slice(0, 2);
+        undoBtn.style.display = currentCat.kind === 'path' ? '' : 'none';
+        hintText.textContent = HINTS[currentCat.kind];
+        updateCalibUI();
+        update();
+    }
+
+    modeSelect.addEventListener('change', () => setMode(+modeSelect.value));
+    speedSelect.addEventListener('change', () => { currentSpeed = +speedSelect.value; update(); });
+    typeToggle.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-cat]');
+        if (btn) setCategory(btn.dataset.cat);
+    });
+    calibInput.addEventListener('input', () => {
+        const v = calibInput.value.trim();
+        const num = v === '' ? null : parseFloat(v);
+        const val = (num == null || isNaN(num)) ? null : num;
+        if (currentCat.speeds) currentMode.secPerCell100 = val;
+        else currentMode.secPerCell = val;
         update();
     });
 
@@ -617,6 +868,7 @@
 
     window.addEventListener('resize', resize);
     updateCompassNote();
+    setCategory('clone');
     setPhase(2);
 })();
 </script>
