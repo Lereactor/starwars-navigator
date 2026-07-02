@@ -85,8 +85,17 @@
     button.danger { background: #7a3d3d; border-color: #b06a6a; }
     button.danger:hover { background: #984c4c; }
 
+    .stage-row {
+        display: flex;
+        width: 100%;
+        max-width: 900px;
+        gap: 10px;
+        align-items: flex-start;
+    }
     .stage {
         width: 100%;
+        flex: 1 1 auto;
+        min-width: 0;
         max-width: 900px;
         aspect-ratio: 1 / 1;
         position: relative;
@@ -97,6 +106,32 @@
         box-shadow: 0 10px 30px rgba(0,0,0,.5);
     }
     #map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
+
+    .quick-routes {
+        display: none;
+        flex-direction: column;
+        gap: 6px;
+        flex: 0 0 200px;
+        width: 200px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 10px;
+    }
+    .quick-routes.show { display: flex; }
+    .quick-routes h4 {
+        font-size: .68rem; text-transform: uppercase; letter-spacing: .5px;
+        color: var(--muted); font-weight: 600; margin-bottom: 2px;
+    }
+    .quick-routes button {
+        text-align: left; white-space: normal; line-height: 1.25;
+        font-size: .78rem; padding: 7px 9px;
+    }
+    @media (max-width: 700px) {
+        .stage-row { flex-wrap: wrap; }
+        .quick-routes { width: 100%; flex-basis: 100%; flex-direction: row; flex-wrap: wrap; }
+        .quick-routes button { flex: 1 1 45%; }
+    }
 
     .zoom-ctl {
         position: absolute; right: 10px; bottom: 10px;
@@ -173,7 +208,7 @@
 <body>
 
 <div class="bar">
-    <div class="title">🧭 <b>StarWarsRP</b> · навигатор</div>
+    <div class="title">🧭 <b>StarWarsRP</b> · навигатор<span class="map-badge" title="Автор">2562 · Glebak · Сержант</span></div>
     <div class="field-ctl">
         <label>Фаза</label>
         <div class="phase-toggle" id="phaseToggle">
@@ -221,14 +256,17 @@
     <button id="clearBtn" class="danger">✕ Сброс</button>
 </div>
 
-<div class="stage">
-    <canvas id="map"></canvas>
-    <div class="zoom-ctl">
-        <button id="zoomIn" title="Приблизить">+</button>
-        <div class="zlvl" id="zoomLvl">1.0×</div>
-        <button id="zoomOut" title="Отдалить">−</button>
-        <button id="zoomReset" title="Сбросить вид">⟲</button>
+<div class="stage-row">
+    <div class="stage">
+        <canvas id="map"></canvas>
+        <div class="zoom-ctl">
+            <button id="zoomIn" title="Приблизить">+</button>
+            <div class="zlvl" id="zoomLvl">1.0×</div>
+            <button id="zoomOut" title="Отдалить">−</button>
+            <button id="zoomReset" title="Сбросить вид">⟲</button>
+        </div>
     </div>
+    <div class="quick-routes" id="quickRoutes"></div>
 </div>
 
 <div class="results" id="results"></div>
@@ -313,6 +351,20 @@
         },
     };
 
+    // ---- быстрые маршруты LAAT/i для карты МЦБ ----
+    // старт всегда из I1 (база); клик по кнопке строит маршрут I1 → точка
+    const MCB_QUICK_START = { row: 'I', col: 1 };
+    const MCB_QUICK_ROUTES = [
+        { row: 'B', col: 2,  name: 'Перерабатывающий узел' },
+        { row: 'O', col: 4,  name: 'Космопорт' },
+        { row: 'G', col: 5,  name: 'Узел связи' },
+        { row: 'I', col: 8,  name: 'Башня связи' },
+        { row: 'N', col: 12, name: 'Грузовой корабль' },
+        { row: 'C', col: 13, name: 'База по добыче кристаллов' },
+        { row: 'G', col: 13, name: 'Лагерь G' },
+        { row: 'C', col: 6,  name: 'Лагерь C' },
+    ];
+
     const bg = new Image();
     let bgReady = false;
     bg.onload = () => {
@@ -335,6 +387,7 @@
         document.getElementById('zoomLvl').textContent = '1.0×';
         bgReady = false;
         bg.src = m.file;
+        updateQuickRoutesVisibility();
         update();
     }
 
@@ -380,6 +433,12 @@
         let sy = Math.max(0, Math.min(map.rows - 1, Math.floor(p.y * map.rows))); // индекс строки сверху
         const rowIdx = map.rowsFromTop ? sy : (map.rows - 1 - sy);                // индекс буквы
         return LETTERS[rowIdx] + (cx + 1);   // напр. "H8": строка-буква + столбец-число
+    }
+    // ---- обратное преобразование: буква+число клетки → нормализованная точка (центр клетки) ----
+    function cellCenter(row, col) {
+        const rowIdx = LETTERS.indexOf(row);
+        const sy = map.rowsFromTop ? rowIdx : (map.rows - 1 - rowIdx);
+        return { x: (col - 1 + 0.5) / map.cols, y: (sy + 0.5) / map.rows };
     }
 
     // ---- отрисовка ----
@@ -754,6 +813,24 @@
         ballistic: 'ЛКМ — точка · перетащить точку — сдвинуть · 3-й клик — новая позиция · колесо — зум · ПКМ/Ctrl — панорама',
     };
 
+    // ---- панель быстрых маршрутов LAAT/i (только карта МЦБ) ----
+    const quickRoutes = document.getElementById('quickRoutes');
+    quickRoutes.innerHTML = '<h4>LAAT/i · старт ' + MCB_QUICK_START.row + MCB_QUICK_START.col + '</h4>';
+    MCB_QUICK_ROUTES.forEach(r => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = r.row + '-' + r.col + ' — ' + r.name;
+        btn.addEventListener('click', () => {
+            points = [cellCenter(MCB_QUICK_START.row, MCB_QUICK_START.col), cellCenter(r.row, r.col)];
+            update();
+        });
+        quickRoutes.appendChild(btn);
+    });
+    function updateQuickRoutesVisibility() {
+        const show = map.id === 'mcb' && currentCat === CATEGORIES.transport && currentMode && currentMode.id === 'laat';
+        quickRoutes.classList.toggle('show', show);
+    }
+
     // калибровка сек/клетку для текущего режима — редактируется прямо на странице,
     // без правки кода (аналогично полю «Сторона клетки»)
     function updateCalibUI() {
@@ -767,6 +844,7 @@
     function setMode(i) {
         currentMode = currentCat.modes[i] || currentCat.modes[0];
         updateCalibUI();
+        updateQuickRoutesVisibility();
         update();
     }
 
@@ -804,6 +882,7 @@
         undoBtn.style.display = currentCat.kind === 'path' ? '' : 'none';
         hintText.textContent = HINTS[currentCat.kind];
         updateCalibUI();
+        updateQuickRoutesVisibility();
         update();
     }
 
