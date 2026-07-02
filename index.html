@@ -212,7 +212,7 @@
 <div class="bar">
     <div class="field-ctl">
         <label for="cellSize">Сторона клетки</label>
-        <input type="number" id="cellSize" value="135" min="0.1" step="1">
+        <input type="number" id="cellSize" value="132" min="0.1" step="1">
         <span>ед.</span>
     </div>
     <div class="spacer"></div>
@@ -254,28 +254,28 @@
     //            false — подписи уже впечатаны в изображение
     // phase: номер фазы (1 или 2) — для группировки в переключателе фаз
     const MAPS = [
-        { id: 'mcb',      name: 'МЦБ-17/9/3-18',       file: 'field.jpg',           cols: 15, rows: 15, rowsFromTop: true,  ownLabels: true,  cellSide: 135, phase: 2 },
-        { id: 'tat',      name: 'Татуин',              file: 'tatooine.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'tatc',     name: 'Татуин - город',      file: 'tatooine-city.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'alderaan', name: 'Альдераан',           file: 'alderaan.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'anaxes',   name: 'Анаксес',             file: 'anaxes.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'felucia',  name: 'Фелуция',             file: 'feluciya.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'geo',      name: 'Джеонозис - улитка',  file: 'jeonozis.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'geo-base', name: 'Джеонозис - база',    file: 'jeonozis-base.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'geo-fact', name: 'Джеонозис - завод',   file: 'jeonozis-factory.png',cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'geo-main', name: 'Джеонозис - гл.улей', file: 'jeonozis-main.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'cor-under',name: 'Корусант - подземный',file: 'koresant-under.png',  cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'rishi',    name: 'Луна Риши',           file: 'luna-rishi.png',      cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'mygeeto',  name: 'Мигетто',             file: 'migetto.png',         cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'mygeeto2', name: 'Мигетто-2',           file: 'migetto-2.png',       cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'moraband', name: 'Морабанд',            file: 'moraband.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'nabu-ang', name: 'Набу - ангар',        file: 'nabu-angar.png',      cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'nabu-tr',  name: 'Набу - лес',          file: 'nabu-tree.png',       cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'renvar',   name: 'Рен Вар',             file: 'renvar.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'renvar-mt',name: 'Рен Вар - горы',      file: 'renvar-mountain.png', cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'ryloth',   name: 'Рилот',               file: 'rilot.png',           cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'takodana', name: 'Такодана',            file: 'takodana.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
-        { id: 'utapau',   name: 'Утапау',              file: 'utapau.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 135, phase: 2 },
+        { id: 'mcb',      name: 'МЦБ-17/9/3-18',       file: 'field.jpg',           cols: 15, rows: 15, rowsFromTop: true,  ownLabels: true,  cellSide: 132, phase: 2 },
+        { id: 'tat',      name: 'Татуин',              file: 'tatooine.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'tatc',     name: 'Татуин - город',      file: 'tatooine-city.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'alderaan', name: 'Альдераан',           file: 'alderaan.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'anaxes',   name: 'Анаксес',             file: 'anaxes.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'felucia',  name: 'Фелуция',             file: 'feluciya.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'geo',      name: 'Джеонозис - улитка',  file: 'jeonozis.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'geo-base', name: 'Джеонозис - база',    file: 'jeonozis-base.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'geo-fact', name: 'Джеонозис - завод',   file: 'jeonozis-factory.png',cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'geo-main', name: 'Джеонозис - гл.улей', file: 'jeonozis-main.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'cor-under',name: 'Корусант - подземный',file: 'koresant-under.png',  cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'rishi',    name: 'Луна Риши',           file: 'luna-rishi.png',      cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'mygeeto',  name: 'Мигетто',             file: 'migetto.png',         cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'mygeeto2', name: 'Мигетто-2',           file: 'migetto-2.png',       cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'moraband', name: 'Морабанд',            file: 'moraband.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'nabu-ang', name: 'Набу - ангар',        file: 'nabu-angar.png',      cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'nabu-tr',  name: 'Набу - лес',          file: 'nabu-tree.png',       cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'renvar',   name: 'Рен Вар',             file: 'renvar.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'renvar-mt',name: 'Рен Вар - горы',      file: 'renvar-mountain.png', cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'ryloth',   name: 'Рилот',               file: 'rilot.png',           cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'takodana', name: 'Такодана',            file: 'takodana.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'utapau',   name: 'Утапау',              file: 'utapau.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
     ];
     let map = MAPS[0];
 
@@ -290,17 +290,17 @@
         clone: {
             label: 'Клон', kind: 'path', modeLabel: 'Режим',
             modes: [
-                { id: 'walk', name: 'Пешком',      secPerCell: 100 },
-                { id: 'jog',  name: 'Лёгкий бег',  secPerCell: 35 },
-                { id: 'run',  name: 'Быстрый бег', secPerCell: 22 },
+                { id: 'walk', name: 'Пешком',      secPerCell: 97.78 },
+                { id: 'jog',  name: 'Лёгкий бег',  secPerCell: 34.22 },
+                { id: 'run',  name: 'Быстрый бег', secPerCell: 21.51 },
             ],
         },
         transport: {
             label: 'Транспорт', kind: 'path', modeLabel: 'Транспорт',
             speeds: [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000],
             modes: [
-                { id: 'laat',   name: 'LAAT/i',  secPerCell100: 18.53 },
-                { id: 'arc170', name: 'ARC-170', secPerCell100: 11.118 },
+                { id: 'laat',   name: 'LAAT/i',  secPerCell100: 18.12 },
+                { id: 'arc170', name: 'ARC-170', secPerCell100: 10.871 },
                 { id: 'tx130',  name: 'TX-130',  secPerCell100: null },
                 { id: 'atrt',   name: 'AT-RT',   secPerCell100: null },
             ],
@@ -321,7 +321,7 @@
         resize();
     };
 
-    let cellSide = 135;
+    let cellSide = 132;
     let points = [];     // массив {x,y} в норм-координатах поля [0..1]
     let currentCat = CATEGORIES.clone;   // текущий тип
     let currentMode = currentCat.modes[0];
