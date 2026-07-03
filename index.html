@@ -30,6 +30,36 @@
         min-height: 100%;
     }
 
+    /* ---- каркас: карта + панель управления ---- */
+    .app-shell {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        width: 100%;
+        max-width: 900px;
+    }
+    .map-col { display: flex; align-items: center; justify-content: center; width: 100%; min-width: 0; }
+    .side-col { display: flex; flex-direction: column; gap: 10px; width: 100%; min-width: 0; }
+
+    /* широкий экран: карта слева на всю высоту, панель справа со своей прокруткой */
+    @media (min-width: 900px) {
+        body { padding: 12px; gap: 12px; }
+        .app-shell {
+            flex-direction: row;
+            max-width: 1600px;
+            height: calc(100vh - 24px);
+            gap: 14px;
+        }
+        .map-col { flex: 1 1 auto; height: 100%; }
+        .side-col {
+            flex: 0 1 380px;
+            min-width: 300px;
+            height: 100%;
+            overflow-y: auto;
+            padding-right: 2px;
+        }
+    }
+
     .bar {
         width: 100%;
         max-width: 900px;
@@ -42,6 +72,7 @@
         align-items: center;
         gap: 8px 14px;
     }
+    .panel-actions { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
     .title { font-weight: 300; font-size: 1.05rem; letter-spacing: .5px; }
     .title b { font-weight: 600; }
     .map-badge {
@@ -49,9 +80,7 @@
         font-size: .72rem; font-weight: 600; letter-spacing: .5px;
         background: #1c4e5c; border: 1px solid #4f97a8; border-radius: 20px; color: var(--accent);
     }
-    .spacer { flex: 1; }
-
-    .field-ctl { display: flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); }
+    .field-ctl { display: flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); flex-shrink: 0; }
     .field-ctl input {
         width: 66px; padding: 5px 8px; text-align: center;
         border: 1px solid #3f8090; border-radius: 8px;
@@ -85,17 +114,8 @@
     button.danger { background: #7a3d3d; border-color: #b06a6a; }
     button.danger:hover { background: #984c4c; }
 
-    .stage-row {
-        display: flex;
-        width: 100%;
-        max-width: 900px;
-        gap: 10px;
-        align-items: flex-start;
-    }
     .stage {
         width: 100%;
-        flex: 1 1 auto;
-        min-width: 0;
         max-width: 900px;
         aspect-ratio: 1 / 1;
         position: relative;
@@ -106,13 +126,14 @@
         box-shadow: 0 10px 30px rgba(0,0,0,.5);
     }
     #map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: none; }
+    @media (min-width: 900px) {
+        .stage { width: auto; height: 100%; max-width: 100%; max-height: 100%; }
+    }
 
     .quick-routes {
         display: none;
         flex-direction: column;
         gap: 6px;
-        flex: 0 0 200px;
-        width: 200px;
         background: var(--panel);
         border: 1px solid var(--line);
         border-radius: 14px;
@@ -126,11 +147,6 @@
     .quick-routes button {
         text-align: left; white-space: normal; line-height: 1.25;
         font-size: .78rem; padding: 7px 9px;
-    }
-    @media (max-width: 700px) {
-        .stage-row { flex-wrap: wrap; }
-        .quick-routes { width: 100%; flex-basis: 100%; flex-direction: row; flex-wrap: wrap; }
-        .quick-routes button { flex: 1 1 45%; }
     }
 
     .zoom-ctl {
@@ -183,6 +199,7 @@
     .path-points .pt { color: var(--me); }
     .path-points .pt:last-child { color: var(--target); }
     .path-points .arrow { color: var(--muted); font-weight: 300; }
+    .table-scroll { overflow-x: auto; }
     .seg-table {
         width: 100%; border-collapse: collapse; overflow: hidden;
         background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
@@ -207,73 +224,88 @@
 </head>
 <body>
 
-<div class="bar">
-    <div class="title">🧭 <b>StarWarsRP</b> · навигатор<span class="map-badge" title="Автор">2562 · Glebak · Сержант</span></div>
-    <div class="field-ctl">
-        <label>Фаза</label>
-        <div class="phase-toggle" id="phaseToggle">
-            <button type="button" data-phase="1">Phase-1</button>
-            <button type="button" data-phase="2">Phase-2</button>
+<div class="app-shell">
+
+    <div class="map-col">
+        <div class="stage">
+            <canvas id="map"></canvas>
+            <div class="zoom-ctl">
+                <button id="zoomIn" title="Приблизить">+</button>
+                <div class="zlvl" id="zoomLvl">1.0×</div>
+                <button id="zoomOut" title="Отдалить">−</button>
+                <button id="zoomReset" title="Сбросить вид">⟲</button>
+            </div>
         </div>
     </div>
-    <div class="field-ctl">
-        <label for="mapSelect">Карта</label>
-        <select id="mapSelect"></select>
-    </div>
-    <div class="spacer"></div>
-    <div class="field-ctl">
-        <label>Тип</label>
-        <div class="phase-toggle" id="typeToggle">
-            <button type="button" data-cat="clone">Клон</button>
-            <button type="button" data-cat="transport">Транспорт</button>
-            <button type="button" data-cat="weapon">Оружие</button>
+
+    <div class="side-col">
+
+        <div class="bar">
+            <div class="title">🧭 <b>StarWarsRP</b> · навигатор<span class="map-badge" title="Автор">2562 · Glebak · Сержант</span></div>
         </div>
-    </div>
-    <div class="field-ctl">
-        <label for="modeSelect" id="modeLabel">Режим</label>
-        <select id="modeSelect"></select>
-    </div>
-    <div class="field-ctl" id="speedCtl" style="display:none">
-        <label for="speedSelect">Скорость</label>
-        <select id="speedSelect"></select>
-    </div>
-    <div class="field-ctl" id="calibCtl" style="display:none">
-        <label for="calibInput" id="calibLabel">Калибровка</label>
-        <input type="number" id="calibInput" step="0.01" min="0" placeholder="—">
-        <span>с/кл</span>
-    </div>
-</div>
 
-<div class="bar">
-    <div class="field-ctl">
-        <label for="cellSize">Сторона клетки</label>
-        <input type="number" id="cellSize" value="132" min="0.1" step="1">
-        <span>ед.</span>
-    </div>
-    <div class="spacer"></div>
-    <button id="northBtn" title="Повернуть север на 90°">🧭 Север: →</button>
-    <button id="undoBtn" title="Убрать последнюю точку">↶ Убрать последнюю</button>
-    <button id="clearBtn" class="danger">✕ Сброс</button>
-</div>
-
-<div class="stage-row">
-    <div class="stage">
-        <canvas id="map"></canvas>
-        <div class="zoom-ctl">
-            <button id="zoomIn" title="Приблизить">+</button>
-            <div class="zlvl" id="zoomLvl">1.0×</div>
-            <button id="zoomOut" title="Отдалить">−</button>
-            <button id="zoomReset" title="Сбросить вид">⟲</button>
+        <div class="bar">
+            <div class="field-ctl">
+                <label>Фаза</label>
+                <div class="phase-toggle" id="phaseToggle">
+                    <button type="button" data-phase="1">Phase-1</button>
+                    <button type="button" data-phase="2">Phase-2</button>
+                </div>
+            </div>
+            <div class="field-ctl">
+                <label for="mapSelect">Карта</label>
+                <select id="mapSelect"></select>
+            </div>
         </div>
+
+        <div class="bar">
+            <div class="field-ctl">
+                <label>Тип</label>
+                <div class="phase-toggle" id="typeToggle">
+                    <button type="button" data-cat="clone">Клон</button>
+                    <button type="button" data-cat="transport">Транспорт</button>
+                    <button type="button" data-cat="weapon">Оружие</button>
+                </div>
+            </div>
+            <div class="field-ctl">
+                <label for="modeSelect" id="modeLabel">Режим</label>
+                <select id="modeSelect"></select>
+            </div>
+            <div class="field-ctl" id="speedCtl" style="display:none">
+                <label for="speedSelect">Скорость</label>
+                <select id="speedSelect"></select>
+            </div>
+            <div class="field-ctl" id="calibCtl" style="display:none">
+                <label for="calibInput" id="calibLabel">Калибровка</label>
+                <input type="number" id="calibInput" step="0.01" min="0" placeholder="—">
+                <span>с/кл</span>
+            </div>
+        </div>
+
+        <div class="bar">
+            <div class="field-ctl">
+                <label for="cellSize">Сторона клетки</label>
+                <input type="number" id="cellSize" value="132" min="0.1" step="1">
+                <span>ед.</span>
+            </div>
+            <div class="panel-actions">
+                <button id="northBtn" title="Повернуть север на 90°">🧭 Север: →</button>
+                <button id="undoBtn" title="Убрать последнюю точку">↶ Убрать последнюю</button>
+                <button id="clearBtn" class="danger">✕ Сброс</button>
+            </div>
+        </div>
+
+        <div class="quick-routes" id="quickRoutes"></div>
+
+        <div class="results" id="results"></div>
+
+        <div class="bar" style="justify-content:center; gap:10px;">
+            <span class="hint" id="hintText"></span>
+            <span class="hint compass-note" id="compassNote"></span>
+        </div>
+
     </div>
-    <div class="quick-routes" id="quickRoutes"></div>
-</div>
 
-<div class="results" id="results"></div>
-
-<div class="bar" style="justify-content:center; gap:16px;">
-    <span class="hint" id="hintText"></span>
-    <span class="hint compass-note" id="compassNote"></span>
 </div>
 
 <script>
@@ -645,14 +677,14 @@
         let table = '';
         if (points.length >= 2) {
             table =
-                '<table class="seg-table"><thead><tr>' +
+                '<div class="table-scroll"><table class="seg-table"><thead><tr>' +
                 '<th>Участок</th><th>Расстояние</th><th>Время</th><th>Азимут</th>' +
                 '</tr></thead><tbody>' + rows +
                 '<tr class="total"><td>ИТОГО</td>' +
                 '<td>' + totUnits.toFixed(1) + ' <small>ед. · ' + totCells.toFixed(2) + ' кл.</small></td>' +
                 '<td>' + fmtTime(totCells) + '</td>' +
                 '<td>—</td></tr>' +
-                '</tbody></table>';
+                '</tbody></table></div>';
         } else {
             table = '<div class="empty-note">Добавь ещё точку, чтобы получить участок.</div>';
         }
