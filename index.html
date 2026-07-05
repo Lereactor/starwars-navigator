@@ -564,15 +564,16 @@
             y: Math.max(0, Math.min(1, Y / (map.rows * cellSide)))
         };
     }
-    // yaw из setang (градусы, конвенция Source engine: yaw=0 → +X, рост против часовой) →
-    // угол взгляда в системе координат картинки (радианы, для стрелки); null, если калибровки нет.
-    // ПРЕДВАРИТЕЛЬНО: конвенция не проверена вторым замером (только «смотрю на N») —
-    // если стрелка окажется развёрнута не туда, придётся поправить знак/формулу здесь.
+    // yaw из setang (градусы) → угол взгляда в системе координат картинки (радианы, для стрелки).
+    // Формула вида (-cos(yaw), sin(yaw)) подобрана и проверена по 3 замерам игрока на МЦБ/H1
+    // (2026-07-06): «смотрю на N» дважды даёт расчётный азимут ≈358.8° (≈0°=север), а замер
+    // с заявленным «азимут 240» даёт расчётные 238.9° — расхождение ~1.1-1.2° в обоих случаях,
+    // что в пределах точности «на глаз». Null, если калибровки нет.
     function worldYawToMapAngle(yawDeg) {
         const p = calibParams();
         if (!p) return null;
         const yawRad = yawDeg * Math.PI / 180;
-        const wdirX = Math.cos(yawRad), wdirY = Math.sin(yawRad);
+        const wdirX = -Math.cos(yawRad), wdirY = Math.sin(yawRad);
         const mdirX = p.are * wdirX - p.aim * wdirY;
         const mdirY = p.aim * wdirX + p.are * wdirY;
         return Math.atan2(mdirY, mdirX);
