@@ -220,6 +220,28 @@
         grid-column: 1 / -1; color: var(--muted); font-size: .85rem;
         padding: 10px 4px;
     }
+
+    /* модалка «Я здесь» */
+    .modal-overlay {
+        display: none; position: fixed; inset: 0; background: rgba(4,12,15,0.72);
+        align-items: center; justify-content: center; z-index: 50; padding: 16px;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+        width: 100%; max-width: 420px;
+        background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+        padding: 16px; display: flex; flex-direction: column; gap: 10px;
+        box-shadow: 0 20px 50px rgba(0,0,0,.5);
+    }
+    .modal h3 { font-size: 1rem; font-weight: 600; }
+    .modal textarea {
+        width: 100%; resize: vertical; min-height: 70px;
+        background: #123f4b; color: var(--text); border: 1px solid #3f8090; border-radius: 8px;
+        padding: 8px 10px; font: 13px/1.4 'Consolas', monospace; outline: none;
+    }
+    .modal textarea:focus { border-color: var(--accent); background: #16505f; }
+    .modal-msg { font-size: .82rem; color: var(--muted); min-height: 1.2em; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
 </style>
 </head>
 <body>
@@ -290,6 +312,7 @@
             </div>
             <div class="panel-actions">
                 <button id="northBtn" title="Повернуть север на 90°">🧭 Север: →</button>
+                <button id="hereBtn" title="Задать позицию по игровым координатам">📍 Я здесь</button>
                 <button id="undoBtn" title="Убрать последнюю точку">↶ Убрать последнюю</button>
                 <button id="clearBtn" class="danger">✕ Сброс</button>
             </div>
@@ -308,6 +331,19 @@
 
 </div>
 
+<div class="modal-overlay" id="hereOverlay">
+    <div class="modal">
+        <h3>📍 Я здесь</h3>
+        <p class="hint">Вставь строку из игры (setpos/setang) — позиция станет точкой №1 (или точкой «Я» в режиме «Оружие»).</p>
+        <textarea id="hereInput" placeholder="setpos -650.866150 -6928.594238 -135.968750;setang 2.248406 -29.701571 0.000000"></textarea>
+        <div class="modal-msg" id="hereMsg"></div>
+        <div class="modal-actions">
+            <button id="hereCancel" class="danger">Отмена</button>
+            <button id="hereApply">Применить</button>
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
     const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -323,29 +359,39 @@
     // ownLabels: true — рисовать свою сетку и подписи (легенда обрезана);
     //            false — подписи уже впечатаны в изображение
     // phase: номер фазы (1 или 2) — для группировки в переключателе фаз
+    // worldCalib: калибровка «игровые координаты → карта» для кнопки «Я здесь».
+    //   null, пока не откалибровано. Формат после калибровки:
+    //   { p1: { row:'A', col:1,  wx: <setpos X>, wy: <setpos Y> },
+    //     p2: { row:'O', col:15, wx: <setpos X>, wy: <setpos Y> } }
+    //   (две любые различные клетки карты + игровые координаты их центра)
     const MAPS = [
-        { id: 'mcb',      name: 'МЦБ-17/9/3-18',       file: 'field.jpg',           cols: 15, rows: 15, rowsFromTop: true,  ownLabels: true,  cellSide: 132, phase: 2 },
-        { id: 'tat',      name: 'Татуин',              file: 'tatooine.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'tatc',     name: 'Татуин - город',      file: 'tatooine-city.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'alderaan', name: 'Альдераан',           file: 'alderaan.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'anaxes',   name: 'Анаксес',             file: 'anaxes.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'felucia',  name: 'Фелуция',             file: 'feluciya.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'geo',      name: 'Джеонозис - улитка',  file: 'jeonozis.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'geo-base', name: 'Джеонозис - база',    file: 'jeonozis-base.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'geo-fact', name: 'Джеонозис - завод',   file: 'jeonozis-factory.png',cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'geo-main', name: 'Джеонозис - гл.улей', file: 'jeonozis-main.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'cor-under',name: 'Корусант - подземный',file: 'koresant-under.png',  cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'rishi',    name: 'Луна Риши',           file: 'luna-rishi.png',      cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'mygeeto',  name: 'Мигетто',             file: 'migetto.png',         cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'mygeeto2', name: 'Мигетто-2',           file: 'migetto-2.png',       cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'moraband', name: 'Морабанд',            file: 'moraband.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'nabu-ang', name: 'Набу - ангар',        file: 'nabu-angar.png',      cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'nabu-tr',  name: 'Набу - лес',          file: 'nabu-tree.png',       cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'renvar',   name: 'Рен Вар',             file: 'renvar.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'renvar-mt',name: 'Рен Вар - горы',      file: 'renvar-mountain.png', cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'ryloth',   name: 'Рилот',               file: 'rilot.png',           cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'takodana', name: 'Такодана',            file: 'takodana.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
-        { id: 'utapau',   name: 'Утапау',              file: 'utapau.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2 },
+        { id: 'mcb',      name: 'МЦБ-17/9/3-18',       file: 'field.jpg',           cols: 15, rows: 15, rowsFromTop: true,  ownLabels: true,  cellSide: 132, phase: 2,
+          worldCalib: {
+              // клетка H1: нижний правый угол и верхний правый угол (замер игрока, 2026-07-06)
+              p1: { row: 'H', col: 1, corner: 'br', wx: -14069.247070, wy: -1176.503418 },
+              p2: { row: 'H', col: 1, corner: 'tr', wx: -14118.161133, wy: 1025.801270 },
+          } },
+        { id: 'tat',      name: 'Татуин',              file: 'tatooine.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'tatc',     name: 'Татуин - город',      file: 'tatooine-city.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'alderaan', name: 'Альдераан',           file: 'alderaan.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'anaxes',   name: 'Анаксес',             file: 'anaxes.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'felucia',  name: 'Фелуция',             file: 'feluciya.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'geo',      name: 'Джеонозис - улитка',  file: 'jeonozis.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'geo-base', name: 'Джеонозис - база',    file: 'jeonozis-base.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'geo-fact', name: 'Джеонозис - завод',   file: 'jeonozis-factory.png',cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'geo-main', name: 'Джеонозис - гл.улей', file: 'jeonozis-main.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'cor-under',name: 'Корусант - подземный',file: 'koresant-under.png',  cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'rishi',    name: 'Луна Риши',           file: 'luna-rishi.png',      cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'mygeeto',  name: 'Мигетто',             file: 'migetto.png',         cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'mygeeto2', name: 'Мигетто-2',           file: 'migetto-2.png',       cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'moraband', name: 'Морабанд',            file: 'moraband.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'nabu-ang', name: 'Набу - ангар',        file: 'nabu-angar.png',      cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'nabu-tr',  name: 'Набу - лес',          file: 'nabu-tree.png',       cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'renvar',   name: 'Рен Вар',             file: 'renvar.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'renvar-mt',name: 'Рен Вар - горы',      file: 'renvar-mountain.png', cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'ryloth',   name: 'Рилот',               file: 'rilot.png',           cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'takodana', name: 'Такодана',            file: 'takodana.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
+        { id: 'utapau',   name: 'Утапау',              file: 'utapau.png',          cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
     ];
     let map = MAPS[0];
 
@@ -466,11 +512,70 @@
         const rowIdx = map.rowsFromTop ? sy : (map.rows - 1 - sy);                // индекс буквы
         return LETTERS[rowIdx] + (cx + 1);   // напр. "H8": строка-буква + столбец-число
     }
-    // ---- обратное преобразование: буква+число клетки → нормализованная точка (центр клетки) ----
-    function cellCenter(row, col) {
+    // ---- обратное преобразование: буква+число клетки (+ угол) → нормализованная точка ----
+    // corner: 'center' (по умолчанию) | 'tl' | 'tr' | 'bl' | 'br' — угол клетки, а не только центр
+    // (нужно для калибровки «Я здесь», когда известны координаты именно угла клетки)
+    function cellPoint(row, col, corner) {
         const rowIdx = LETTERS.indexOf(row);
         const sy = map.rowsFromTop ? rowIdx : (map.rows - 1 - rowIdx);
-        return { x: (col - 1 + 0.5) / map.cols, y: (sy + 0.5) / map.rows };
+        const left = (col - 1) / map.cols, right = col / map.cols;
+        const top = sy / map.rows, bottom = (sy + 1) / map.rows;
+        switch (corner) {
+            case 'tl': return { x: left,  y: top };
+            case 'tr': return { x: right, y: top };
+            case 'bl': return { x: left,  y: bottom };
+            case 'br': return { x: right, y: bottom };
+            default:   return { x: (left + right) / 2, y: (top + bottom) / 2 };
+        }
+    }
+    function cellCenter(row, col) { return cellPoint(row, col, 'center'); }
+
+    // ---- «Я здесь»: перевод игровых координат (setpos/setang) в точку и стрелку на карте ----
+    // По двум опорным точкам (клетка+угол + игровые X/Y в ней) строится преобразование
+    // подобия (перенос + поворот + масштаб) — на случай, если игровые оси не совпадают
+    // с осями картинки. calibParams() — общая часть для положения и для направления взгляда.
+    function calibParams() {
+        const c = map.worldCalib;
+        if (!c) return null;
+        const c1 = cellPoint(c.p1.row, c.p1.col, c.p1.corner || 'center');
+        const c2 = cellPoint(c.p2.row, c.p2.col, c.p2.corner || 'center');
+        const X1 = c1.x * map.cols * cellSide, Y1 = c1.y * map.rows * cellSide;
+        const X2 = c2.x * map.cols * cellSide, Y2 = c2.y * map.rows * cellSide;
+        const wdx = c.p2.wx - c.p1.wx, wdy = c.p2.wy - c.p1.wy;
+        const mdx = X2 - X1, mdy = Y2 - Y1;
+        const denom = wdx * wdx + wdy * wdy;
+        if (denom === 0) return null;
+        // a = (M2-M1)/(W2-W1) — комплексное деление (даёт поворот+масштаб между игровыми осями и картой)
+        return {
+            are: (mdx * wdx + mdy * wdy) / denom,
+            aim: (mdy * wdx - mdx * wdy) / denom,
+            X1, Y1, p1wx: c.p1.wx, p1wy: c.p1.wy,
+        };
+    }
+    // игровые X/Y → нормализованная точка карты [0..1]; null, если калибровки нет
+    function worldToNorm(wx, wy) {
+        const p = calibParams();
+        if (!p) return null;
+        const dwx = wx - p.p1wx, dwy = wy - p.p1wy;
+        const X = p.X1 + (p.are * dwx - p.aim * dwy);
+        const Y = p.Y1 + (p.are * dwy + p.aim * dwx);
+        return {
+            x: Math.max(0, Math.min(1, X / (map.cols * cellSide))),
+            y: Math.max(0, Math.min(1, Y / (map.rows * cellSide)))
+        };
+    }
+    // yaw из setang (градусы, конвенция Source engine: yaw=0 → +X, рост против часовой) →
+    // угол взгляда в системе координат картинки (радианы, для стрелки); null, если калибровки нет.
+    // ПРЕДВАРИТЕЛЬНО: конвенция не проверена вторым замером (только «смотрю на N») —
+    // если стрелка окажется развёрнута не туда, придётся поправить знак/формулу здесь.
+    function worldYawToMapAngle(yawDeg) {
+        const p = calibParams();
+        if (!p) return null;
+        const yawRad = yawDeg * Math.PI / 180;
+        const wdirX = Math.cos(yawRad), wdirY = Math.sin(yawRad);
+        const mdirX = p.are * wdirX - p.aim * wdirY;
+        const mdirY = p.aim * wdirX + p.are * wdirY;
+        return Math.atan2(mdirY, mdirX);
     }
 
     // ---- отрисовка ----
@@ -532,9 +637,29 @@
         points.forEach((p, i) => {
             const st = pointStyle(i, points.length);
             drawPoint(p, st.color, st.label);
+            if (p.dir != null) drawHeadingArrow(p, st.color);
         });
 
         drawCompass();
+    }
+
+    // стрелка направления взгляда («Я здесь» из setang), рисуется поверх точки
+    function drawHeadingArrow(p, color) {
+        const W = canvas.width, H = canvas.height, s = scale;
+        const x = p.x * W, y = p.y * H;
+        const len = Math.max(18, W / 20) / s;   // постоянная экранная длина
+        const ex = x + Math.cos(p.dir) * len, ey = y + Math.sin(p.dir) * len;
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 3 / s;
+        ctx.strokeStyle = color;
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke();
+        const headLen = len * 0.35;
+        const a1 = p.dir + Math.PI * 0.82, a2 = p.dir - Math.PI * 0.82;
+        ctx.beginPath();
+        ctx.moveTo(ex, ey); ctx.lineTo(ex + Math.cos(a1) * headLen, ey + Math.sin(a1) * headLen);
+        ctx.moveTo(ex, ey); ctx.lineTo(ex + Math.cos(a2) * headLen, ey + Math.sin(a2) * headLen);
+        ctx.stroke();
+        ctx.lineCap = 'butt';
     }
 
     // цвет и подпись точки: старт — голубой, финиш — жёлтый, промежуточные — акцент
@@ -809,6 +934,57 @@
     });
     clearBtn.addEventListener('click', () => { points = []; update(); });
     document.getElementById('undoBtn').addEventListener('click', () => { points.pop(); update(); });
+
+    // ---- «Я здесь»: модалка с вводом setpos/setang ----
+    const hereBtn = document.getElementById('hereBtn');
+    const hereOverlay = document.getElementById('hereOverlay');
+    const hereInput = document.getElementById('hereInput');
+    const hereMsg = document.getElementById('hereMsg');
+
+    function openHereModal() {
+        hereInput.value = '';
+        hereMsg.textContent = '';
+        hereOverlay.classList.add('show');
+        hereInput.focus();
+    }
+    function closeHereModal() { hereOverlay.classList.remove('show'); }
+
+    function applyHere() {
+        const text = hereInput.value;
+        const posM = text.match(/setpos\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/i);
+        if (!posM) { hereMsg.textContent = 'Не удалось найти setpos в тексте.'; return; }
+        const wx = parseFloat(posM[1]), wy = parseFloat(posM[2]);
+        const angM = text.match(/setang\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/i);
+        const yaw = angM ? parseFloat(angM[2]) : null;
+        const yawNote = yaw != null ? ' · yaw (игра): ' + yaw.toFixed(1) + '°' : '';
+
+        if (!map.worldCalib) {
+            hereMsg.textContent = 'Для карты «' + map.name + '» ещё нет калибровки координат — распознано X ' +
+                wx.toFixed(1) + ', Y ' + wy.toFixed(1) + yawNote + ', но точку поставить пока нельзя.';
+            return;
+        }
+        const norm = worldToNorm(wx, wy);
+        if (!norm) { hereMsg.textContent = 'Ошибка калибровки для этой карты.'; return; }
+        let azNote = '';
+        if (yaw != null) {
+            const dirAngle = worldYawToMapAngle(yaw);
+            if (dirAngle != null) {
+                norm.dir = dirAngle;
+                let az = dirAngle * 180 / Math.PI - northDir * 90;
+                az = ((az % 360) + 360) % 360;
+                azNote = ' · азимут на карте: ' + az.toFixed(1) + '°';
+            }
+        }
+        if (points.length === 0) points.push(norm); else points[0] = norm;
+        update();
+        hereMsg.textContent = 'Готово' + yawNote + azNote + '.';
+        setTimeout(closeHereModal, 1400);
+    }
+
+    hereBtn.addEventListener('click', openHereModal);
+    document.getElementById('hereCancel').addEventListener('click', closeHereModal);
+    document.getElementById('hereApply').addEventListener('click', applyHere);
+    hereOverlay.addEventListener('click', (e) => { if (e.target === hereOverlay) closeHereModal(); });
 
     // ---- направление севера ----
     function updateCompassNote() {
