@@ -367,9 +367,11 @@
     const MAPS = [
         { id: 'mcb',      name: 'МЦБ-17/9/3-18',       file: 'field.jpg',           cols: 15, rows: 15, rowsFromTop: true,  ownLabels: true,  cellSide: 132, phase: 2,
           worldCalib: {
-              // клетка H1: нижний правый угол и верхний правый угол (замер игрока, 2026-07-06)
-              p1: { row: 'H', col: 1, corner: 'br', wx: -14069.247070, wy: -1176.503418 },
-              p2: { row: 'H', col: 1, corner: 'tr', wx: -14118.161133, wy: 1025.801270 },
+              // нижний правый угол клеток A1 и H1 (замер игрока, 2026-07-06) — база 7 строк,
+              // точнее по оси строк, чем прежняя пара (H1 br/tr, 1 клетка). Оба замера — столбец 1,
+              // ось столбцов пока не проверена отдельной точкой (нужна точка из другого столбца).
+              p1: { row: 'A', col: 1, corner: 'br', wx: -15835.279297, wy: 14943.959961 },
+              p2: { row: 'H', col: 1, corner: 'br', wx: -14069.247070, wy: -1176.503418 },
           } },
         { id: 'tat',      name: 'Татуин',              file: 'tatooine.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
         { id: 'tatc',     name: 'Татуин - город',      file: 'tatooine-city.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
