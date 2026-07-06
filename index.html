@@ -361,17 +361,23 @@
     // phase: номер фазы (1 или 2) — для группировки в переключателе фаз
     // worldCalib: калибровка «игровые координаты → карта» для кнопки «Я здесь».
     //   null, пока не откалибровано. Формат после калибровки:
-    //   { p1: { row:'A', col:1,  wx: <setpos X>, wy: <setpos Y> },
-    //     p2: { row:'O', col:15, wx: <setpos X>, wy: <setpos Y> } }
-    //   (две любые различные клетки карты + игровые координаты их центра)
+    //   { points: [ { row:'A', col:1, corner:'br'|'tr'|'bl'|'tl'|undefined(=центр), wx: <setpos X>, wy: <setpos Y> }, ... ] }
+    //   Нужно минимум 3 точки не на одной прямой (чем больше и чем сильнее разбросаны по
+    //   карте — тем точнее). calibParams() считает полный аффинный пересчёт (независимые
+    //   масштаб/сдвиг по X и Y) методом наименьших квадратов по всем точкам сразу — см. там же,
+    //   почему это важно (простой поворот+единый масштаб на этой карте не работает).
     const MAPS = [
         { id: 'mcb',      name: 'МЦБ-17/9/3-18',       file: 'field.jpg',           cols: 15, rows: 15, rowsFromTop: true,  ownLabels: true,  cellSide: 132, phase: 2,
           worldCalib: {
-              // нижний правый угол клеток A1 и H1 (замер игрока, 2026-07-06) — база 7 строк,
-              // точнее по оси строк, чем прежняя пара (H1 br/tr, 1 клетка). Оба замера — столбец 1,
-              // ось столбцов пока не проверена отдельной точкой (нужна точка из другого столбца).
-              p1: { row: 'A', col: 1, corner: 'br', wx: -15835.279297, wy: 14943.959961 },
-              p2: { row: 'H', col: 1, corner: 'br', wx: -14069.247070, wy: -1176.503418 },
+              // 6 замеров игрока, 2026-07-06 — покрывают строки A/H/G и столбцы 1/10/12.
+              points: [
+                  { row: 'A', col: 1,  corner: 'br', wx: -15835.279297, wy: 14943.959961 },
+                  { row: 'H', col: 1,  corner: 'br', wx: -14069.247070, wy: -1176.503418 },
+                  { row: 'A', col: 10, corner: 'bl', wx: 1637.742676,   wy: 14945.513672 },
+                  { row: 'A', col: 10, corner: 'br', wx: 3805.382080,   wy: 14927.877930 },
+                  { row: 'G', col: 12, corner: 'tl', wx: 7076.652344,   wy: 5011.885742 },
+                  { row: 'G', col: 12, corner: 'br', wx: 8928.767578,   wy: 2877.135986 },
+              ],
           } },
         { id: 'tat',      name: 'Татуин',              file: 'tatooine.png',        cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
         { id: 'tatc',     name: 'Татуин - город',      file: 'tatooine-city.png',   cols: 14, rows: 14, rowsFromTop: false, ownLabels: false, cellSide: 132, phase: 2, worldCalib: null },
@@ -533,51 +539,70 @@
     function cellCenter(row, col) { return cellPoint(row, col, 'center'); }
 
     // ---- «Я здесь»: перевод игровых координат (setpos/setang) в точку и стрелку на карте ----
-    // По двум опорным точкам (клетка+угол + игровые X/Y в ней) строится преобразование
-    // подобия (перенос + поворот + масштаб) — на случай, если игровые оси не совпадают
-    // с осями картинки. calibParams() — общая часть для положения и для направления взгляда.
+    // Полный аффинный пересчёт (X = a*wx + b*wy + tx; Y = c*wx + d*wy + ty), коэффициенты — из
+    // всех точек worldCalib.points методом наименьших квадратов. Проверено эмпирически на 6
+    // замерах МЦБ (2026-07-06): простое «поворот + единый масштаб» по 2 точкам давало ошибку
+    // 3-6 клеток на остальных точках (именно так был обнаружен баг «I1 определилась как I2»),
+    // а независимые X/Y-масштаб+сдвиг — 0.1-0.26 клетки, то есть в пределах того, насколько
+    // точно игрок может встать в угол клетки. Чем больше точек в points и чем шире они
+    // разбросаны по карте (не на одной строке/столбце) — тем точнее фит.
     function calibParams() {
         const c = map.worldCalib;
-        if (!c) return null;
-        const c1 = cellPoint(c.p1.row, c.p1.col, c.p1.corner || 'center');
-        const c2 = cellPoint(c.p2.row, c.p2.col, c.p2.corner || 'center');
-        const X1 = c1.x * map.cols * cellSide, Y1 = c1.y * map.rows * cellSide;
-        const X2 = c2.x * map.cols * cellSide, Y2 = c2.y * map.rows * cellSide;
-        const wdx = c.p2.wx - c.p1.wx, wdy = c.p2.wy - c.p1.wy;
-        const mdx = X2 - X1, mdy = Y2 - Y1;
-        const denom = wdx * wdx + wdy * wdy;
-        if (denom === 0) return null;
-        // a = (M2-M1)/(W2-W1) — комплексное деление (даёт поворот+масштаб между игровыми осями и картой)
-        return {
-            are: (mdx * wdx + mdy * wdy) / denom,
-            aim: (mdy * wdx - mdx * wdy) / denom,
-            X1, Y1, p1wx: c.p1.wx, p1wy: c.p1.wy,
+        if (!c || !c.points || c.points.length < 3) return null;
+        const pts = c.points.map(p => {
+            const cp = cellPoint(p.row, p.col, p.corner || 'center');
+            return { X: cp.x * map.cols * cellSide, Y: cp.y * map.rows * cellSide, wx: p.wx, wy: p.wy };
+        });
+        const n = pts.length;
+        let Sxx = 0, Sxy = 0, Sx = 0, Syy = 0, Sy = 0;
+        let SxX = 0, SyX = 0, SX = 0, SxY = 0, SyY = 0, SY = 0;
+        for (const p of pts) {
+            Sxx += p.wx * p.wx; Sxy += p.wx * p.wy; Sx += p.wx;
+            Syy += p.wy * p.wy; Sy += p.wy;
+            SxX += p.wx * p.X; SyX += p.wy * p.X; SX += p.X;
+            SxY += p.wx * p.Y; SyY += p.wy * p.Y; SY += p.Y;
+        }
+        const A = [[Sxx, Sxy, Sx], [Sxy, Syy, Sy], [Sx, Sy, n]];
+        const det3 = m => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+                        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+                        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+        const d = det3(A);
+        if (d === 0) return null;
+        const solve = b => {
+            const sol = [];
+            for (let col = 0; col < 3; col++) {
+                const Ac = A.map(row => row.slice());
+                for (let r = 0; r < 3; r++) Ac[r][col] = b[r];
+                sol.push(det3(Ac) / d);
+            }
+            return sol;
         };
+        const [a, b, tx] = solve([SxX, SyX, SX]);
+        const [cc, dd, ty] = solve([SxY, SyY, SY]);
+        return { a, b, cc, dd, tx, ty };
     }
     // игровые X/Y → нормализованная точка карты [0..1]; null, если калибровки нет
     function worldToNorm(wx, wy) {
         const p = calibParams();
         if (!p) return null;
-        const dwx = wx - p.p1wx, dwy = wy - p.p1wy;
-        const X = p.X1 + (p.are * dwx - p.aim * dwy);
-        const Y = p.Y1 + (p.are * dwy + p.aim * dwx);
+        const X = p.a * wx + p.b * wy + p.tx;
+        const Y = p.cc * wx + p.dd * wy + p.ty;
         return {
             x: Math.max(0, Math.min(1, X / (map.cols * cellSide))),
             y: Math.max(0, Math.min(1, Y / (map.rows * cellSide)))
         };
     }
     // yaw из setang (градусы) → угол взгляда в системе координат картинки (радианы, для стрелки).
-    // Формула вида (-cos(yaw), sin(yaw)) подобрана и проверена по 3 замерам игрока на МЦБ/H1
-    // (2026-07-06): «смотрю на N» дважды даёт расчётный азимут ≈358.8° (≈0°=север), а замер
-    // с заявленным «азимут 240» даёт расчётные 238.9° — расхождение ~1.1-1.2° в обоих случаях,
-    // что в пределах точности «на глаз». Null, если калибровки нет.
+    // Направление — вектор (-cos(yaw), sin(yaw)) в игровых осях (подобрано и проверено по 3
+    // замерам игрока на МЦБ/H1, 2026-07-06 — расхождение ~1.1-1.2°), затем применяется линейная
+    // часть аффинного преобразования (без сдвига tx/ty — это направление, а не точка).
     function worldYawToMapAngle(yawDeg) {
         const p = calibParams();
         if (!p) return null;
         const yawRad = yawDeg * Math.PI / 180;
         const wdirX = -Math.cos(yawRad), wdirY = Math.sin(yawRad);
-        const mdirX = p.are * wdirX - p.aim * wdirY;
-        const mdirY = p.aim * wdirX + p.are * wdirY;
+        const mdirX = p.a * wdirX + p.b * wdirY;
+        const mdirY = p.cc * wdirX + p.dd * wdirY;
         return Math.atan2(mdirY, mdirX);
     }
 
