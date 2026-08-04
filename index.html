@@ -324,11 +324,14 @@
             <div class="panel-actions">
                 <button id="northBtn" title="Повернуть север на 90°">🧭 Север: →</button>
                 <button id="hereBtn" title="Задать позицию по игровым координатам">📍 Я здесь</button>
+                <button id="calibSaveBtn" style="display:none" title="Если точку пришлось перетащить на верное место — сохранить это как новый калибровочный замер">📌 Откалибровать по точке</button>
+                <button id="calibResetBtn" style="display:none" title="Убрать все локальные калибровочные точки, добавленные в этом браузере">🗑 Сброс калибровки</button>
                 <button id="mcb3dBtn" title="Показать/скрыть объёмные объекты на карте МЦБ">🧊 3D: вкл</button>
                 <button id="undoBtn" title="Убрать последнюю точку">↶ Убрать последнюю</button>
                 <button id="clearBtn" class="danger">✕ Сброс</button>
             </div>
         </div>
+        <div class="hint" id="calibMsg" style="display:none"></div>
 
         <div class="quick-routes" id="quickRoutes"></div>
 
@@ -764,9 +767,28 @@
         document.getElementById('zoomLvl').textContent = '1.0×';
         bgReady = false;
         bg.src = m.file;
+        loadExtraCalib();
+        lastHereWorld = null;
         updateQuickRoutesVisibility();
         updateMcb3dBtnVisibility();
+        updateCalibSaveBtnVisibility();
         update();
+    }
+
+    // ---- онлайн-калибровка «Я здесь»: пользователь перетаскивает поставленную точку на
+    // реально известное место и жмёт «Откалибровать по точке» — новый замер {x,y,wx,wy}
+    // добавляется к расчёту аффинного фита и сохраняется в localStorage (переживает перезагрузку
+    // страницы на этом устройстве/браузере). Не путать с «базовыми» точками worldCalib.points
+    // в коде — те правятся вручную и одинаковы для всех; extraCalibPoints — локальные добавки.
+    let extraCalibPoints = [];
+    let lastHereWorld = null;   // {wx,wy} из последнего успешного «Я здесь» — нужно для калибровки
+    function calibStorageKey(m) { return 'swrp_calib_extra_' + m.id; }
+    function loadExtraCalib() {
+        try { extraCalibPoints = JSON.parse(localStorage.getItem(calibStorageKey(map)) || '[]'); }
+        catch (e) { extraCalibPoints = []; }
+    }
+    function saveExtraCalib() {
+        localStorage.setItem(calibStorageKey(map), JSON.stringify(extraCalibPoints));
     }
 
     // направление севера: 0=вправо(→), 1=вниз(↓), 2=влево(←), 3=вверх(↑)
@@ -840,9 +862,13 @@
     // разбросаны по карте (не на одной строке/столбце) — тем точнее фит.
     function calibParams() {
         const c = map.worldCalib;
-        if (!c || !c.points || c.points.length < 3) return null;
-        const pts = c.points.map(p => {
-            const cp = cellPoint(p.row, p.col, p.corner || 'center');
+        if (!c || !c.points) return null;
+        const allPoints = c.points.concat(extraCalibPoints);
+        if (allPoints.length < 3) return null;
+        const pts = allPoints.map(p => {
+            // точка либо привязана к углу клетки (row/col/corner), либо это «сырая» норм-точка
+            // {x,y} — так сохраняются онлайн-калибровки, перетащенные пользователем на карте
+            const cp = (p.x != null && p.y != null) ? { x: p.x, y: p.y } : cellPoint(p.row, p.col, p.corner || 'center');
             return { X: cp.x * map.cols * cellSide, Y: cp.y * map.rows * cellSide, wx: p.wx, wy: p.wy };
         });
         const n = pts.length;
@@ -1334,6 +1360,8 @@
             }
         }
         if (points.length === 0) points.push(norm); else points[0] = norm;
+        lastHereWorld = { wx, wy };
+        updateCalibSaveBtnVisibility();
         update();
         hereMsg.textContent = 'Готово' + yawNote + azNote + '.';
         setTimeout(closeHereModal, 1400);
@@ -1343,6 +1371,38 @@
     document.getElementById('hereCancel').addEventListener('click', closeHereModal);
     document.getElementById('hereApply').addEventListener('click', applyHere);
     hereOverlay.addEventListener('click', (e) => { if (e.target === hereOverlay) closeHereModal(); });
+
+    // ---- кнопка «Откалибровать по точке»: точку №1 перетащили на реально верное место —
+    // фиксируем пару (норм-координата на карте) ↔ (игровые wx,wy из последнего «Я здесь») ----
+    const calibSaveBtn = document.getElementById('calibSaveBtn');
+    const calibResetBtn = document.getElementById('calibResetBtn');
+    const calibMsg = document.getElementById('calibMsg');
+    function updateCalibSaveBtnVisibility() {
+        calibSaveBtn.style.display = (map.worldCalib && lastHereWorld) ? '' : 'none';
+        calibResetBtn.style.display = extraCalibPoints.length > 0 ? '' : 'none';
+    }
+    calibSaveBtn.addEventListener('click', () => {
+        const p = points[0];
+        if (!p || !lastHereWorld) return;
+        const pt = { x: +p.x.toFixed(5), y: +p.y.toFixed(5), wx: lastHereWorld.wx, wy: lastHereWorld.wy };
+        extraCalibPoints.push(pt);
+        saveExtraCalib();
+        updateCalibSaveBtnVisibility();
+        update();
+        calibMsg.style.display = '';
+        calibMsg.innerHTML = 'Точка добавлена в калибровку этого браузера (' + extraCalibPoints.length +
+            ' локальных). Чтобы закрепить её для всех — пришлите разработчику эту строку:<br>' +
+            '<code style="user-select:all">{ x: ' + pt.x + ', y: ' + pt.y + ', wx: ' + pt.wx + ', wy: ' + pt.wy + ' }</code>';
+    });
+    calibResetBtn.addEventListener('click', () => {
+        if (!confirm('Убрать все локальные калибровочные точки (' + extraCalibPoints.length + ') в этом браузере?')) return;
+        extraCalibPoints = [];
+        saveExtraCalib();
+        updateCalibSaveBtnVisibility();
+        update();
+        calibMsg.style.display = '';
+        calibMsg.textContent = 'Локальные калибровочные точки очищены.';
+    });
 
     // ---- направление севера ----
     function updateCompassNote() {
