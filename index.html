@@ -483,16 +483,17 @@
             { x: 0.000, y: 0.400 }, { x: 0.099, y: 0.400 }, { x: 0.120, y: 0.467 },
             { x: 0.120, y: 0.520 }, { x: 0.096, y: 0.600 }, { x: 0.000, y: 0.600 },
         ] },
-        { name: 'Перерабатывающий узел', height: 153, footprint: rectFP(0.067, 0.067, 0.093, 0.093) },
+        { name: 'Перерабатывающий узел', height: 153, footprint: rectFP(0.067, 0.067, 0.100, 0.100) },
         { name: 'Космопорт',   height: 105, footprint: rectFP(0.217, 0.920, 0.295, 0.997) },
         { name: 'Башня связи 1', height: 195, footprint: rectFP(0.478, 0.534, 0.491, 0.547) },
         { name: 'Башня связи 2', height: 195, footprint: rectFP(0.483, 0.547, 0.505, 0.569) },
-        { name: 'Грузовой корабль', height: 95, footprint: rectFP(0.750, 0.853, 0.830, 0.907) },
-        { name: 'База по добыче кристаллов', height: 116, footprint: rectFP(0.744, 0.078, 0.856, 0.189) },
+        { name: 'Грузовой корабль', height: 95, footprint: rectFP(0.744, 0.877, 0.856, 0.989) },
+        { name: 'База по добыче кристаллов', height: 116, footprint: rectFP(0.767, 0.100, 0.833, 0.167) },
     ];
 
     // объёмная (псевдо-3D) отрисовка объектов из MCB_OBJECTS: контур поднимается вверх
-    // на высоту, пропорциональную height (в клетках = height/cellSide), стены + крыша
+    // на высоту, пропорциональную height (в клетках = height/cellSide) — голографический
+    // стеклянный стиль (в цветах интерфейса), сверху подписана высота в метрах
     function drawMcbObjects() {
         if (map.id !== 'mcb') return;
         const W = canvas.width, H = canvas.height, s = scale;
@@ -502,27 +503,81 @@
             const extrude = (obj.height / cellSide) * pxPerCellY * EXTRUDE_SCALE;
             const base = obj.footprint.map(p => ({ x: p.x * W, y: p.y * H }));
             const top = base.map(p => ({ x: p.x, y: p.y - extrude }));
+
+            // стены — стеклянный градиент: у земли почти прозрачно, у крыши голубая дымка
             ctx.lineWidth = 1 / s;
-            // стены
-            ctx.fillStyle = 'rgba(90,70,40,0.55)';
-            ctx.strokeStyle = 'rgba(40,30,15,0.7)';
             for (let i = 0; i < base.length; i++) {
                 const j = (i + 1) % base.length;
+                const grad = ctx.createLinearGradient(base[i].x, base[i].y, top[i].x, top[i].y);
+                grad.addColorStop(0, 'rgba(79,208,255,0.03)');
+                grad.addColorStop(1, 'rgba(111,193,214,0.24)');
                 ctx.beginPath();
                 ctx.moveTo(base[i].x, base[i].y);
                 ctx.lineTo(base[j].x, base[j].y);
                 ctx.lineTo(top[j].x, top[j].y);
                 ctx.lineTo(top[i].x, top[i].y);
                 ctx.closePath();
-                ctx.fill(); ctx.stroke();
+                ctx.fillStyle = grad;
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(111,193,214,0.25)';
+                ctx.stroke();
+                // энергетические полосы на стене — светлее к середине высоты
+                const BANDS = 3;
+                for (let k = 1; k <= BANDS; k++) {
+                    const t = k / (BANDS + 1);
+                    const p1x = base[i].x + (top[i].x - base[i].x) * t, p1y = base[i].y + (top[i].y - base[i].y) * t;
+                    const p2x = base[j].x + (top[j].x - base[j].x) * t, p2y = base[j].y + (top[j].y - base[j].y) * t;
+                    ctx.beginPath(); ctx.moveTo(p1x, p1y); ctx.lineTo(p2x, p2y);
+                    ctx.lineWidth = 0.6 / s;
+                    ctx.strokeStyle = 'rgba(180,235,255,' + (0.06 + 0.10 * Math.sin(t * Math.PI)).toFixed(3) + ')';
+                    ctx.stroke();
+                }
             }
-            // крыша
+
+            // крыша — полупрозрачная голограмма со светящимся контуром + диагональная сетка
             ctx.beginPath();
             top.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
             ctx.closePath();
-            ctx.fillStyle = 'rgba(255,205,120,0.6)';
-            ctx.strokeStyle = 'rgba(120,90,40,0.85)';
-            ctx.fill(); ctx.stroke();
+            ctx.fillStyle = 'rgba(143,222,255,0.16)';
+            ctx.fill();
+
+            ctx.save();
+            ctx.clip();
+            const txs = top.map(p => p.x), tys = top.map(p => p.y);
+            const minX = Math.min(...txs), maxX = Math.max(...txs);
+            const minY = Math.min(...tys), maxY = Math.max(...tys);
+            const span = maxY - minY;
+            const spacing = Math.max(6 / s, (maxX - minX) / 6);
+            ctx.strokeStyle = 'rgba(200,245,255,0.16)';
+            ctx.lineWidth = 0.5 / s;
+            for (let x = minX - span; x < maxX; x += spacing) {
+                ctx.beginPath();
+                ctx.moveTo(x, minY);
+                ctx.lineTo(x + span, maxY);
+                ctx.stroke();
+            }
+            ctx.restore();
+
+            ctx.beginPath();
+            top.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+            ctx.closePath();
+            ctx.shadowColor = 'rgba(111,225,255,0.9)';
+            ctx.shadowBlur = 6 / s;
+            ctx.lineWidth = 1.3 / s;
+            ctx.strokeStyle = 'rgba(190,240,255,0.8)';
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // подпись высоты — по центру крыши, постоянный экранный размер
+            const cx = top.reduce((sum, p) => sum + p.x, 0) / top.length;
+            const cy = top.reduce((sum, p) => sum + p.y, 0) / top.length;
+            ctx.font = `bold ${(W / 85) / s}px system-ui`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.lineWidth = 3 / s;
+            ctx.strokeStyle = 'rgba(5,15,20,0.75)';
+            ctx.strokeText(obj.height + ' м', cx, cy);
+            ctx.fillStyle = '#eafcff';
+            ctx.fillText(obj.height + ' м', cx, cy);
         });
     }
 
