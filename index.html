@@ -475,6 +475,15 @@
     function rectFP(x0, y0, x1, y1) {
         return [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
     }
+    // восьмиугольник (срезанные углы прямоугольника) — для круглых платформ/площадок
+    function octagonFP(x0, y0, x1, y1, cut) {
+        cut = cut || 0.3;
+        const w = x1 - x0, h = y1 - y0, cx = cut * w, cy = cut * h;
+        return [
+            { x: x0 + cx, y: y0 }, { x: x1 - cx, y: y0 }, { x: x1, y: y0 + cy }, { x: x1, y: y1 - cy },
+            { x: x1 - cx, y: y1 }, { x: x0 + cx, y: y1 }, { x: x0, y: y1 - cy }, { x: x0, y: y0 + cy },
+        ];
+    }
     const MCB_OBJECTS = [
         { name: 'Штаб',        height: 113, footprint: rectFP(0.008, 0.475, 0.059, 0.525) },
         { name: 'Казармы 1',   height: 86,  footprint: rectFP(0.045, 0.475, 0.100, 0.525) },
@@ -487,8 +496,8 @@
         { name: 'Космопорт',   height: 105, footprint: rectFP(0.217, 0.920, 0.295, 0.997) },
         { name: 'Башня связи 1', height: 195, footprint: rectFP(0.478, 0.534, 0.491, 0.547) },
         { name: 'Башня связи 2', height: 195, footprint: rectFP(0.483, 0.547, 0.505, 0.569) },
-        { name: 'Грузовой корабль', height: 95, footprint: rectFP(0.744, 0.877, 0.856, 0.989) },
-        { name: 'База по добыче кристаллов', height: 116, footprint: rectFP(0.767, 0.100, 0.833, 0.167) },
+        { name: 'Грузовой корабль', height: 95, footprint: rectFP(0.759, 0.877, 0.871, 0.989) },
+        { name: 'База по добыче кристаллов', height: 116, footprint: octagonFP(0.767, 0.100, 0.833, 0.167) },
     ];
 
     // объёмная (псевдо-3D) отрисовка объектов из MCB_OBJECTS: контур поднимается вверх
