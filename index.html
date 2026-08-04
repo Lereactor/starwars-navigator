@@ -472,9 +472,6 @@
     // footprint — контур объекта в НОРМ-координатах ВСЕЙ карты (0..1), не клетки целиком —
     // подобран по видимому спрайту на field.jpg (сам объект занимает часть клетки).
     // height — высота объекта в метрах.
-    function rectFP(x0, y0, x1, y1) {
-        return [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
-    }
     // восьмиугольник (срезанные углы прямоугольника) — для круглых платформ/площадок
     function octagonFP(x0, y0, x1, y1, cut) {
         cut = cut || 0.3;
@@ -485,76 +482,108 @@
         ];
     }
     const MCB_OBJECTS = [
-        { name: 'Штаб',        height: 113, footprint: rectFP(0.008, 0.475, 0.059, 0.525) },
-        { name: 'Казармы 1',   height: 86,  footprint: rectFP(0.045, 0.475, 0.100, 0.525) },
-        { name: 'Казармы 2',   height: 86,  footprint: rectFP(0.045, 0.540, 0.100, 0.590) },
-        { name: 'Стены',       height: 103, footprint: [
+        // стены рисуются первыми и как «силовое поле» (fence) — тонкий контур без сплошной
+        // крыши, чтобы не перекрывать здания внутри периметра, которые рисуются поверх
+        { name: 'Стены',       height: 103, fence: true, labelPos: { x: 0.016, y: 0.412 }, footprint: [
             { x: 0.000, y: 0.400 }, { x: 0.099, y: 0.400 }, { x: 0.120, y: 0.467 },
             { x: 0.120, y: 0.520 }, { x: 0.096, y: 0.600 }, { x: 0.000, y: 0.600 },
         ] },
-        { name: 'Перерабатывающий узел', height: 153, footprint: rectFP(0.067, 0.067, 0.100, 0.100) },
-        { name: 'Космопорт',   height: 105, footprint: rectFP(0.217, 0.920, 0.295, 0.997) },
-        { name: 'Башня связи 1', height: 195, footprint: rectFP(0.478, 0.534, 0.491, 0.547) },
-        { name: 'Башня связи 2', height: 195, footprint: rectFP(0.483, 0.547, 0.505, 0.569) },
-        { name: 'Грузовой корабль', height: 95, footprint: rectFP(0.759, 0.877, 0.871, 0.989) },
-        { name: 'База по добыче кристаллов', height: 116, footprint: octagonFP(0.767, 0.100, 0.833, 0.167) },
+        { name: 'Штаб',        height: 113, footprint: octagonFP(0.006, 0.472, 0.050, 0.528, 0.18) },
+        { name: 'Казармы 1',   height: 86,  footprint: octagonFP(0.053, 0.472, 0.100, 0.528, 0.18) },
+        { name: 'Казармы 2',   height: 86,  footprint: octagonFP(0.045, 0.536, 0.100, 0.592, 0.18) },
+        { name: 'Перерабатывающий узел', height: 153, taper: 0.55,
+          footprint: octagonFP(0.079, 0.079, 0.098, 0.098, 0.4) },
+        { name: 'Перераб. узел — цистерна 1', height: 55, taper: 0.75, noLabel: true,
+          footprint: octagonFP(0.101, 0.074, 0.118, 0.091, 0.4) },
+        { name: 'Перераб. узел — цистерна 2', height: 48, taper: 0.75, noLabel: true,
+          footprint: octagonFP(0.076, 0.101, 0.092, 0.117, 0.4) },
+        { name: 'Космопорт',   height: 105, footprint: octagonFP(0.217, 0.920, 0.295, 0.997, 0.22) },
+        { name: 'Башня связи 1', height: 195, taper: 0.4, beacon: true, bridge: 'comm',
+          footprint: octagonFP(0.476, 0.530, 0.493, 0.548, 0.42) },
+        { name: 'Башня связи 2', height: 195, taper: 0.4, beacon: true, bridge: 'comm',
+          footprint: octagonFP(0.481, 0.550, 0.507, 0.572, 0.42) },
+        { name: 'Грузовой корабль', height: 95, taper: 0.85, footprint: octagonFP(0.759, 0.877, 0.871, 0.989, 0.35) },
+        { name: 'База по добыче кристаллов', height: 116, rings: true,
+          footprint: octagonFP(0.767, 0.100, 0.833, 0.167, 0.3) },
     ];
 
-    // объёмная (псевдо-3D) отрисовка объектов из MCB_OBJECTS: контур поднимается вверх
-    // на высоту, пропорциональную height (в клетках = height/cellSide) — голографический
-    // стеклянный стиль (в цветах интерфейса), сверху подписана высота в метрах
-    function drawMcbObjects() {
-        if (map.id !== 'mcb') return;
+    // рисует объём одного объекта: стены (стеклянный градиент + энергополосы), голо-крыша
+    // (радиальная подсветка + диагональная сетка + светящийся контур) и подпись высоты.
+    // taper < 1 сужает крышу к центру относительно основания — даёт силуэт башни/цистерны.
+    // возвращает геометрию крыши, чтобы дорисовать доп. детали (антенна, кольца площадки...)
+    function drawVolume(footprint, heightM, opts) {
+        opts = opts || {};
         const W = canvas.width, H = canvas.height, s = scale;
         const EXTRUDE_SCALE = 0.5;   // визуальный демпфер, чтобы высокие объекты не перекрывали всю карту
         const pxPerCellY = H / map.rows;
-        MCB_OBJECTS.forEach(obj => {
-            const extrude = (obj.height / cellSide) * pxPerCellY * EXTRUDE_SCALE;
-            const base = obj.footprint.map(p => ({ x: p.x * W, y: p.y * H }));
-            const top = base.map(p => ({ x: p.x, y: p.y - extrude }));
+        const extrude = (heightM / cellSide) * pxPerCellY * EXTRUDE_SCALE;
+        const base = footprint.map(p => ({ x: p.x * W, y: p.y * H }));
+        const taper = opts.taper == null ? 1 : opts.taper;
+        const bcx = base.reduce((sum, p) => sum + p.x, 0) / base.length;
+        const top = base.map(p => ({ x: bcx + (p.x - bcx) * taper, y: p.y - extrude }));
 
-            // стены — стеклянный градиент: у земли почти прозрачно, у крыши голубая дымка
-            ctx.lineWidth = 1 / s;
-            for (let i = 0; i < base.length; i++) {
-                const j = (i + 1) % base.length;
-                const grad = ctx.createLinearGradient(base[i].x, base[i].y, top[i].x, top[i].y);
-                grad.addColorStop(0, 'rgba(79,208,255,0.03)');
-                grad.addColorStop(1, 'rgba(111,193,214,0.24)');
-                ctx.beginPath();
-                ctx.moveTo(base[i].x, base[i].y);
-                ctx.lineTo(base[j].x, base[j].y);
-                ctx.lineTo(top[j].x, top[j].y);
-                ctx.lineTo(top[i].x, top[i].y);
-                ctx.closePath();
-                ctx.fillStyle = grad;
-                ctx.fill();
-                ctx.strokeStyle = 'rgba(111,193,214,0.25)';
+        const wallAlpha = opts.fence ? 0.4 : 1;
+        ctx.lineWidth = 1 / s;
+        for (let i = 0; i < base.length; i++) {
+            const j = (i + 1) % base.length;
+            const grad = ctx.createLinearGradient(base[i].x, base[i].y, top[i].x, top[i].y);
+            grad.addColorStop(0, 'rgba(79,208,255,0.03)');
+            grad.addColorStop(1, 'rgba(111,193,214,' + (0.24 * wallAlpha).toFixed(3) + ')');
+            ctx.beginPath();
+            ctx.moveTo(base[i].x, base[i].y);
+            ctx.lineTo(base[j].x, base[j].y);
+            ctx.lineTo(top[j].x, top[j].y);
+            ctx.lineTo(top[i].x, top[i].y);
+            ctx.closePath();
+            ctx.fillStyle = grad;
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(111,193,214,' + (0.25 * wallAlpha).toFixed(3) + ')';
+            ctx.stroke();
+            // энергетические полосы на стене — светлее к середине высоты
+            const BANDS = opts.fence ? 5 : 3;
+            for (let k = 1; k <= BANDS; k++) {
+                const t = k / (BANDS + 1);
+                const p1x = base[i].x + (top[i].x - base[i].x) * t, p1y = base[i].y + (top[i].y - base[i].y) * t;
+                const p2x = base[j].x + (top[j].x - base[j].x) * t, p2y = base[j].y + (top[j].y - base[j].y) * t;
+                ctx.beginPath(); ctx.moveTo(p1x, p1y); ctx.lineTo(p2x, p2y);
+                ctx.lineWidth = 0.6 / s;
+                ctx.strokeStyle = 'rgba(180,235,255,' + ((0.06 + 0.10 * Math.sin(t * Math.PI)) * wallAlpha).toFixed(3) + ')';
                 ctx.stroke();
-                // энергетические полосы на стене — светлее к середине высоты
-                const BANDS = 3;
-                for (let k = 1; k <= BANDS; k++) {
-                    const t = k / (BANDS + 1);
-                    const p1x = base[i].x + (top[i].x - base[i].x) * t, p1y = base[i].y + (top[i].y - base[i].y) * t;
-                    const p2x = base[j].x + (top[j].x - base[j].x) * t, p2y = base[j].y + (top[j].y - base[j].y) * t;
-                    ctx.beginPath(); ctx.moveTo(p1x, p1y); ctx.lineTo(p2x, p2y);
-                    ctx.lineWidth = 0.6 / s;
-                    ctx.strokeStyle = 'rgba(180,235,255,' + (0.06 + 0.10 * Math.sin(t * Math.PI)).toFixed(3) + ')';
-                    ctx.stroke();
-                }
             }
+        }
 
-            // крыша — полупрозрачная голограмма со светящимся контуром + диагональная сетка
+        const cx = top.reduce((sum, p) => sum + p.x, 0) / top.length;
+        const cy = top.reduce((sum, p) => sum + p.y, 0) / top.length;
+        const txs = top.map(p => p.x), tys = top.map(p => p.y);
+        const minX = Math.min(...txs), maxX = Math.max(...txs);
+        const minY = Math.min(...tys), maxY = Math.max(...tys);
+
+        if (opts.fence) {
+            // забор/силовое поле — только светящийся верхний контур, без сплошной крыши,
+            // чтобы не перекрывать здания внутри периметра
             ctx.beginPath();
             top.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
             ctx.closePath();
-            ctx.fillStyle = 'rgba(143,222,255,0.16)';
+            ctx.shadowColor = 'rgba(111,225,255,0.6)';
+            ctx.shadowBlur = 5 / s;
+            ctx.lineWidth = 1 / s;
+            ctx.strokeStyle = 'rgba(190,240,255,0.5)';
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        } else {
+            // крыша — радиальная голо-подсветка (ярче в центре — эффект купола) + сетка + контур
+            ctx.beginPath();
+            top.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+            ctx.closePath();
+            const roofRad = Math.max(maxX - minX, maxY - minY) * 0.75;
+            const roofGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, roofRad);
+            roofGrad.addColorStop(0, 'rgba(205,247,255,0.36)');
+            roofGrad.addColorStop(1, 'rgba(143,222,255,0.10)');
+            ctx.fillStyle = roofGrad;
             ctx.fill();
 
             ctx.save();
             ctx.clip();
-            const txs = top.map(p => p.x), tys = top.map(p => p.y);
-            const minX = Math.min(...txs), maxX = Math.max(...txs);
-            const minY = Math.min(...tys), maxY = Math.max(...tys);
             const span = maxY - minY;
             const spacing = Math.max(6 / s, (maxX - minX) / 6);
             ctx.strokeStyle = 'rgba(200,245,255,0.16)';
@@ -576,17 +605,109 @@
             ctx.strokeStyle = 'rgba(190,240,255,0.8)';
             ctx.stroke();
             ctx.shadowBlur = 0;
+        }
 
-            // подпись высоты — по центру крыши, постоянный экранный размер
-            const cx = top.reduce((sum, p) => sum + p.x, 0) / top.length;
-            const cy = top.reduce((sum, p) => sum + p.y, 0) / top.length;
+        if (!opts.noLabel) {
+            const lx = opts.labelPos ? opts.labelPos.x * W : cx;
+            const ly = opts.labelPos ? opts.labelPos.y * H : cy;
             ctx.font = `bold ${(W / 85) / s}px system-ui`;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.lineWidth = 3 / s;
             ctx.strokeStyle = 'rgba(5,15,20,0.75)';
-            ctx.strokeText(obj.height + ' м', cx, cy);
+            ctx.strokeText(heightM + ' м', lx, ly);
             ctx.fillStyle = '#eafcff';
-            ctx.fillText(obj.height + ' м', cx, cy);
+            ctx.fillText(heightM + ' м', lx, ly);
+        }
+
+        return { cx, cy, minX, maxX, minY, maxY };
+    }
+
+    // диск-антенна на макушке башни + светящийся луч-маяк вверх
+    function drawBeacon(v) {
+        const s = scale, cx = v.cx, cy = v.cy;
+        const r = (v.maxX - v.minX) * 0.6;
+        ctx.save();
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, r * 1.6, r * 0.55, 0, 0, Math.PI * 2);
+        const dishGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 1.6);
+        dishGrad.addColorStop(0, 'rgba(210,248,255,0.55)');
+        dishGrad.addColorStop(1, 'rgba(120,210,235,0.12)');
+        ctx.fillStyle = dishGrad;
+        ctx.fill();
+        ctx.lineWidth = 1 / s;
+        ctx.strokeStyle = 'rgba(200,245,255,0.7)';
+        ctx.stroke();
+
+        const beamH = r * 14;
+        const beamGrad = ctx.createLinearGradient(cx, cy, cx, cy - beamH);
+        beamGrad.addColorStop(0, 'rgba(150,230,255,0.5)');
+        beamGrad.addColorStop(1, 'rgba(150,230,255,0)');
+        ctx.fillStyle = beamGrad;
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.5, cy);
+        ctx.lineTo(cx + r * 0.5, cy);
+        ctx.lineTo(cx + r * 0.08, cy - beamH);
+        ctx.lineTo(cx - r * 0.08, cy - beamH);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, r * 0.35, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(230,252,255,0.95)';
+        ctx.shadowColor = 'rgba(150,230,255,1)';
+        ctx.shadowBlur = 8 / s;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+
+    // две светящиеся жёлтые кольцевые посадочные площадки на крыше платформы
+    function drawLandingRings(v) {
+        const s = scale;
+        const w = v.maxX - v.minX, h = v.maxY - v.minY;
+        const ringR = Math.min(w, h) * 0.24;
+        [0.33, 0.67].forEach(fx => {
+            const rx = v.minX + w * fx, ry = v.minY + h * 0.55;
+            [1, 0.6].forEach(rf => {
+                ctx.beginPath();
+                ctx.ellipse(rx, ry, ringR * rf, ringR * rf * 0.5, 0, 0, Math.PI * 2);
+                ctx.lineWidth = 1.2 / s;
+                ctx.strokeStyle = 'rgba(255,205,90,0.8)';
+                ctx.shadowColor = 'rgba(255,190,60,0.8)';
+                ctx.shadowBlur = 4 / s;
+                ctx.stroke();
+            });
+        });
+        ctx.shadowBlur = 0;
+    }
+
+    // объёмная (псевдо-3D) отрисовка объектов из MCB_OBJECTS — голографический стеклянный
+    // стиль с доп. деталями по типу объекта (антенны-башни, кольца посадочной площадки)
+    function drawMcbObjects() {
+        if (map.id !== 'mcb') return;
+        const bridges = {};
+        MCB_OBJECTS.forEach(obj => {
+            const v = drawVolume(obj.footprint, obj.height,
+                { taper: obj.taper, noLabel: obj.noLabel, fence: obj.fence, labelPos: obj.labelPos });
+            if (obj.beacon) drawBeacon(v);
+            if (obj.rings) drawLandingRings(v);
+            if (obj.bridge) (bridges[obj.bridge] = bridges[obj.bridge] || []).push(v);
+        });
+        // соединительная антенна-мостик между башнями одной группы (напр. башни связи)
+        const s = scale;
+        Object.values(bridges).forEach(group => {
+            if (group.length < 2) return;
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(group[0].cx, group[0].cy);
+            ctx.lineTo(group[1].cx, group[1].cy);
+            ctx.lineWidth = 1 / s;
+            ctx.shadowColor = 'rgba(150,230,255,0.8)';
+            ctx.shadowBlur = 4 / s;
+            ctx.strokeStyle = 'rgba(200,245,255,0.55)';
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            ctx.restore();
         });
     }
 
