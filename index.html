@@ -324,6 +324,7 @@
             <div class="panel-actions">
                 <button id="northBtn" title="Повернуть север на 90°">🧭 Север: →</button>
                 <button id="hereBtn" title="Задать позицию по игровым координатам">📍 Я здесь</button>
+                <button id="mcb3dBtn" title="Показать/скрыть объёмные объекты на карте МЦБ">🧊 3D: вкл</button>
                 <button id="undoBtn" title="Убрать последнюю точку">↶ Убрать последнюю</button>
                 <button id="clearBtn" class="danger">✕ Сброс</button>
             </div>
@@ -684,7 +685,7 @@
     // объёмная (псевдо-3D) отрисовка объектов из MCB_OBJECTS — голографический стеклянный
     // стиль с доп. деталями по типу объекта (антенны-башни, кольца посадочной площадки)
     function drawMcbObjects() {
-        if (map.id !== 'mcb') return;
+        if (map.id !== 'mcb' || !mcb3dOn) return;
         const bridges = {};
         MCB_OBJECTS.forEach(obj => {
             const v = drawVolume(obj.footprint, obj.height,
@@ -764,6 +765,7 @@
         bgReady = false;
         bg.src = m.file;
         updateQuickRoutesVisibility();
+        updateMcb3dBtnVisibility();
         update();
     }
 
@@ -1278,6 +1280,18 @@
     });
     clearBtn.addEventListener('click', () => { points = []; update(); });
     document.getElementById('undoBtn').addEventListener('click', () => { points.pop(); update(); });
+
+    // ---- переключатель объёмного (3D) слоя объектов на карте МЦБ ----
+    let mcb3dOn = true;
+    const mcb3dBtn = document.getElementById('mcb3dBtn');
+    function updateMcb3dBtnVisibility() {
+        mcb3dBtn.style.display = map.id === 'mcb' ? '' : 'none';
+    }
+    mcb3dBtn.addEventListener('click', () => {
+        mcb3dOn = !mcb3dOn;
+        mcb3dBtn.textContent = '🧊 3D: ' + (mcb3dOn ? 'вкл' : 'выкл');
+        render();
+    });
 
     // ---- «Я здесь»: модалка с вводом setpos/setang ----
     const hereBtn = document.getElementById('hereBtn');
