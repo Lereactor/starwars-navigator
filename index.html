@@ -304,6 +304,17 @@
             </div>
         </div>
 
+        <div class="bar" id="ballisticHeightCtl" style="display:none">
+            <div class="field-ctl">
+                <label for="meHeightInput">Высота «Я», м</label>
+                <input type="number" id="meHeightInput" step="1" value="0">
+            </div>
+            <div class="field-ctl">
+                <label for="targetHeightInput">Высота цели, м</label>
+                <input type="number" id="targetHeightInput" step="1" value="0">
+            </div>
+        </div>
+
         <div class="bar">
             <div class="field-ctl">
                 <label for="cellSize">Сторона клетки</label>
@@ -450,6 +461,100 @@
         { row: 'G', col: 13, name: 'Лагерь G' },
         { row: 'C', col: 6,  name: 'Лагерь C' },
     ];
+
+    // ---- масштаб игровых единиц в метры (для высоты объектов и угла возвышения) ----
+    // сейчас 1:1 (132 игр.ед. = 132 м), но пользователь предупредил, что соотношение
+    // может измениться — правь только это значение, остальной код от него не зависит напрямую.
+    const METERS_PER_GAME_UNIT = 1;
+    function cellsToMeters(cells) { return cells * cellSide * METERS_PER_GAME_UNIT; }
+
+    // ---- объекты с известной высотой на карте МЦБ (для 3D-отрисовки, миномёта и LOS) ----
+    // footprint — контур объекта в НОРМ-координатах ВСЕЙ карты (0..1), не клетки целиком —
+    // подобран по видимому спрайту на field.jpg (сам объект занимает часть клетки).
+    // height — высота объекта в метрах.
+    function rectFP(x0, y0, x1, y1) {
+        return [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+    }
+    const MCB_OBJECTS = [
+        { name: 'Штаб',        height: 113, footprint: rectFP(0.008, 0.475, 0.059, 0.525) },
+        { name: 'Казармы 1',   height: 86,  footprint: rectFP(0.045, 0.475, 0.100, 0.525) },
+        { name: 'Казармы 2',   height: 86,  footprint: rectFP(0.045, 0.540, 0.100, 0.590) },
+        { name: 'Стены',       height: 103, footprint: [
+            { x: 0.000, y: 0.400 }, { x: 0.099, y: 0.400 }, { x: 0.120, y: 0.467 },
+            { x: 0.120, y: 0.520 }, { x: 0.096, y: 0.600 }, { x: 0.000, y: 0.600 },
+        ] },
+        { name: 'Перерабатывающий узел', height: 153, footprint: rectFP(0.067, 0.067, 0.093, 0.093) },
+        { name: 'Космопорт',   height: 105, footprint: rectFP(0.217, 0.920, 0.295, 0.997) },
+        { name: 'Башня связи 1', height: 195, footprint: rectFP(0.478, 0.534, 0.491, 0.547) },
+        { name: 'Башня связи 2', height: 195, footprint: rectFP(0.483, 0.547, 0.505, 0.569) },
+        { name: 'Грузовой корабль', height: 95, footprint: rectFP(0.750, 0.853, 0.830, 0.907) },
+        { name: 'База по добыче кристаллов', height: 116, footprint: rectFP(0.744, 0.078, 0.856, 0.189) },
+    ];
+
+    // объёмная (псевдо-3D) отрисовка объектов из MCB_OBJECTS: контур поднимается вверх
+    // на высоту, пропорциональную height (в клетках = height/cellSide), стены + крыша
+    function drawMcbObjects() {
+        if (map.id !== 'mcb') return;
+        const W = canvas.width, H = canvas.height, s = scale;
+        const EXTRUDE_SCALE = 0.5;   // визуальный демпфер, чтобы высокие объекты не перекрывали всю карту
+        const pxPerCellY = H / map.rows;
+        MCB_OBJECTS.forEach(obj => {
+            const extrude = (obj.height / cellSide) * pxPerCellY * EXTRUDE_SCALE;
+            const base = obj.footprint.map(p => ({ x: p.x * W, y: p.y * H }));
+            const top = base.map(p => ({ x: p.x, y: p.y - extrude }));
+            ctx.lineWidth = 1 / s;
+            // стены
+            ctx.fillStyle = 'rgba(90,70,40,0.55)';
+            ctx.strokeStyle = 'rgba(40,30,15,0.7)';
+            for (let i = 0; i < base.length; i++) {
+                const j = (i + 1) % base.length;
+                ctx.beginPath();
+                ctx.moveTo(base[i].x, base[i].y);
+                ctx.lineTo(base[j].x, base[j].y);
+                ctx.lineTo(top[j].x, top[j].y);
+                ctx.lineTo(top[i].x, top[i].y);
+                ctx.closePath();
+                ctx.fill(); ctx.stroke();
+            }
+            // крыша
+            ctx.beginPath();
+            top.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+            ctx.closePath();
+            ctx.fillStyle = 'rgba(255,205,120,0.6)';
+            ctx.strokeStyle = 'rgba(120,90,40,0.85)';
+            ctx.fill(); ctx.stroke();
+        });
+    }
+
+    // точка внутри полигона (луч по x), нужна для проверки LOS
+    function pointInPoly(pt, poly) {
+        let inside = false;
+        for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+            const hit = ((yi > pt.y) !== (yj > pt.y)) &&
+                (pt.x < (xj - xi) * (pt.y - yi) / (yj - yi) + xi);
+            if (hit) inside = !inside;
+        }
+        return inside;
+    }
+
+    // проверка видимости между me и target (обе точки — норм-координаты) с учётом
+    // высоты объектов MCB_OBJECTS; meH/targetH — высота глаза/цели над землёй, в метрах
+    function checkLOS(me, target, meH, targetH) {
+        if (map.id !== 'mcb') return null;
+        const STEPS = 300;
+        for (let i = 1; i < STEPS; i++) {
+            const t = i / STEPS;
+            const p = { x: me.x + (target.x - me.x) * t, y: me.y + (target.y - me.y) * t };
+            const losHeight = meH + (targetH - meH) * t;
+            for (const obj of MCB_OBJECTS) {
+                if (pointInPoly(p, obj.footprint) && obj.height > losHeight) {
+                    return { blocked: true, name: obj.name, height: obj.height, losHeight };
+                }
+            }
+        }
+        return { blocked: false };
+    }
 
     const bg = new Image();
     let bgReady = false;
@@ -624,6 +729,8 @@
         if (bgReady) ctx.drawImage(bg, 0, 0, W, H);
         else { ctx.fillStyle = '#123'; ctx.fillRect(0, 0, W, H); }
 
+        drawMcbObjects();
+
         // сетка (толщина/шрифт компенсируют масштаб — постоянный экранный размер)
         const s = scale;
         if (map.ownLabels) {
@@ -793,21 +900,38 @@
         return `<div class="card ${cls}"><div class="lbl">${lbl}</div><div class="val">${val}</div></div>`;
     }
 
-    // оружие: я → цель, расстояние + азимут
+    // оружие: я → цель, расстояние + азимут + поправка на высоту (перепад/угол/LOS)
     function renderBallistic() {
         results.className = 'results';
         const me = points[0], target = points[1];
         let dist = '— <small>ед.</small>', az = '— <small>°</small>';
+        let dh = '—', elev = '— <small>°</small>', losCard = '';
         if (me && target) {
             const m = segMetrics(me, target);
             dist = m.distUnits.toFixed(1) + ' <small>ед. · ' + m.distCells.toFixed(2) + ' кл.</small>';
             az = m.az.toFixed(1) + ' <small>°</small>';
+
+            const distMeters = cellsToMeters(m.distCells);
+            const heightDiff = targetHeight - meHeight;
+            dh = (heightDiff >= 0 ? '+' : '') + heightDiff.toFixed(0) + ' <small>м</small>';
+            const elevDeg = distMeters > 0 ? Math.atan2(heightDiff, distMeters) * 180 / Math.PI : 0;
+            elev = elevDeg.toFixed(1) + ' <small>°</small>';
+
+            const los = checkLOS(me, target, meHeight, targetHeight);
+            if (los) {
+                losCard = los.blocked
+                    ? card('los-bad', '🚫 Видимость', 'Перекрыта: ' + los.name + ' <small>(h=' + los.height + 'м)</small>')
+                    : card('los-ok', '✅ Видимость', 'Прямая');
+            }
         }
         results.innerHTML =
             card('me', '<span class="dot me"></span>Моя позиция', me ? cellLabel(me) : '—') +
             card('target', '<span class="dot target"></span>Цель', target ? cellLabel(target) : '—') +
             card('', '📏 Расстояние', dist) +
-            card('', '🧭 Азимут', az);
+            card('', '🧭 Азимут', az) +
+            card('', '↕️ Перепад высот', dh) +
+            card('', '📐 Угол возвышения', elev) +
+            losCard;
     }
 
     // клон/транспорт: маршрут, участки + итог
@@ -1051,6 +1175,20 @@
     const hintText = document.getElementById('hintText');
     let currentSpeed = 100;
 
+    // ---- высота точек для миномёта (оружие): вводится вручную, в метрах ----
+    const ballisticHeightCtl = document.getElementById('ballisticHeightCtl');
+    const meHeightInput = document.getElementById('meHeightInput');
+    const targetHeightInput = document.getElementById('targetHeightInput');
+    let meHeight = 0, targetHeight = 0;
+    meHeightInput.addEventListener('input', () => {
+        meHeight = parseFloat(meHeightInput.value) || 0;
+        update();
+    });
+    targetHeightInput.addEventListener('input', () => {
+        targetHeight = parseFloat(targetHeightInput.value) || 0;
+        update();
+    });
+
     const HINTS = {
         path: 'ЛКМ — добавить точку маршрута · перетащить точку — сдвинуть · «↶ Убрать последнюю» / «Сброс» · колесо — зум · ПКМ/Ctrl — панорама',
         ballistic: 'ЛКМ — точка · перетащить точку — сдвинуть · 3-й клик — новая позиция · колесо — зум · ПКМ/Ctrl — панорама',
@@ -1127,6 +1265,7 @@
         // оружие — максимум 2 точки: обрежем лишние при переключении
         if (currentCat.kind === 'ballistic' && points.length > 2) points = points.slice(0, 2);
         undoBtn.style.display = currentCat.kind === 'path' ? '' : 'none';
+        ballisticHeightCtl.style.display = currentCat.kind === 'ballistic' ? '' : 'none';
         hintText.textContent = HINTS[currentCat.kind];
         updateCalibUI();
         updateQuickRoutesVisibility();
