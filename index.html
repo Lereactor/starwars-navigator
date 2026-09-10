@@ -547,8 +547,13 @@
     };
 
     // ---- быстрые маршруты LAAT/i для карты МЦБ ----
-    // старт всегда из I1 (база); клик по кнопке строит маршрут I1 → точка
-    const MCB_QUICK_START = { row: 'I', col: 1 };
+    // старт всегда из базы; клик по кнопке строит маршрут старт → точка.
+    // Точка задаётся ЛИБО точными игровыми координатами {wx,wy} (setpos X,Y — тогда позиция
+    // считается через тот же аффинный фит worldToNorm(), что и «Я здесь» — максимально точно
+    // и согласованно с ним), ЛИБО, пока точного замера нет, приблизительно по клетке {row,col}
+    // (см. quickRoutePoint() ниже). Актуализируется по мере того, как приходят реальные setpos
+    // ключевых точек — переводить каждую с {row,col} на {wx,wy}, как замеры появляются.
+    const MCB_QUICK_START = { row: 'I', col: 1, name: 'База' };
     const MCB_QUICK_ROUTES = [
         { row: 'A', col: 1,  name: 'Перерабатывающий узел' },
         { row: 'O', col: 4,  name: 'Космопорт' },
@@ -1643,15 +1648,25 @@
     };
 
     // ---- панель быстрых маршрутов для техники (только карта МЦБ) ----
+    // Точка точки маршрута: если заданы точные игровые координаты {wx,wy} — считаем через
+    // worldToNorm() (тот же аффинный фит, что и «Я здесь», максимальная точность и
+    // согласованность); иначе — грубо по клетке {row,col} (пока нет реального замера).
+    function quickRoutePoint(r) {
+        if (r.wx != null && r.wy != null) {
+            const p = worldToNorm(r.wx, r.wy);
+            if (p) return p;
+        }
+        return cellPoint(r.row, r.col, 'center');
+    }
     const quickRoutes = document.getElementById('quickRoutes');
     const quickRoutesTitle = document.createElement('h4');
     quickRoutes.appendChild(quickRoutesTitle);
     MCB_QUICK_ROUTES.forEach(r => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.textContent = r.row + '-' + r.col + ' — ' + r.name;
+        btn.textContent = cellLabel(quickRoutePoint(r)) + ' — ' + r.name;
         btn.addEventListener('click', () => {
-            points = [cellCenter(MCB_QUICK_START.row, MCB_QUICK_START.col), cellCenter(r.row, r.col)];
+            points = [quickRoutePoint(MCB_QUICK_START), quickRoutePoint(r)];
             update();
         });
         quickRoutes.appendChild(btn);
@@ -1660,7 +1675,7 @@
         const show = map.id === 'mcb' && currentCat === CATEGORIES.transport;
         quickRoutes.classList.toggle('show', show);
         if (show) {
-            quickRoutesTitle.textContent = currentMode.name + ' · старт ' + MCB_QUICK_START.row + MCB_QUICK_START.col;
+            quickRoutesTitle.textContent = currentMode.name + ' · старт ' + cellLabel(quickRoutePoint(MCB_QUICK_START));
         }
     }
 
