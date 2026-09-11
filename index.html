@@ -269,17 +269,10 @@
     <div class="side-col">
 
         <div class="bar">
-            <div class="title">🧭 <b>StarWarsRP</b> · навигатор<span class="map-badge" title="Автор">2562 · Glebak · Сержант</span></div>
+            <div class="title">🧭 <b>StarWarsRP</b> · навигатор<span class="map-badge" title="Автор">[ 0072 | Glebak | Сержант-майор воздушных войск ]</span></div>
         </div>
 
         <div class="bar">
-            <div class="field-ctl">
-                <label>Фаза</label>
-                <div class="phase-toggle" id="phaseToggle">
-                    <button type="button" data-phase="1">Phase-1</button>
-                    <button type="button" data-phase="2">Phase-2</button>
-                </div>
-            </div>
             <div class="field-ctl">
                 <label for="mapSelect">Карта</label>
                 <select id="mapSelect"></select>
@@ -1934,54 +1927,26 @@
         update();
     });
 
-    // ---- выбор фазы и карты ----
+    // ---- выбор карты ----
     const mapSelect = document.getElementById('mapSelect');
-    const phaseToggle = document.getElementById('phaseToggle');
-    let currentPhase = 2;
 
-    // заполнить список картами текущей фазы; вернуть глобальный индекс первой карты или null
     function populateMapSelect() {
         mapSelect.innerHTML = '';
-        const inPhase = MAPS.map((m, i) => ({ m, i })).filter(x => x.m.phase === currentPhase);
-        if (inPhase.length === 0) {
-            const opt = document.createElement('option');
-            opt.textContent = '— карт пока нет —';
-            opt.disabled = true; opt.selected = true;
-            mapSelect.appendChild(opt);
-            mapSelect.disabled = true;
-            return null;
-        }
-        mapSelect.disabled = false;
-        inPhase.forEach(({ m, i }) => {
+        MAPS.forEach((m, i) => {
             const opt = document.createElement('option');
             opt.value = i; opt.textContent = m.name;
             mapSelect.appendChild(opt);
         });
-        return inPhase[0].i;
-    }
-
-    function setPhase(p) {
-        currentPhase = p;
-        Array.from(phaseToggle.children).forEach(b => {
-            b.classList.toggle('active', +b.dataset.phase === p);
-        });
-        const firstIdx = populateMapSelect();
-        if (firstIdx !== null) {
-            mapSelect.value = firstIdx;
-            loadMap(MAPS[firstIdx]);
-        }
     }
 
     mapSelect.addEventListener('change', () => loadMap(MAPS[+mapSelect.value]));
-    phaseToggle.addEventListener('click', (e) => {
-        const btn = e.target.closest('button[data-phase]');
-        if (btn) setPhase(+btn.dataset.phase);
-    });
 
     window.addEventListener('resize', resize);
     updateCompassNote();
     setCategory('clone');
-    setPhase(2);
+    populateMapSelect();
+    mapSelect.value = 0;
+    loadMap(MAPS[0]);
 })();
 </script>
 </body>
